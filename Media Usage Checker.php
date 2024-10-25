@@ -3,7 +3,7 @@
 Plugin Name: Media Usage Checker
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress.
 Version: 1.0
-Author: Alexis
+Author: Alexis Olivero
 Author URI: https://www.oliverodev.com/
 */
 
