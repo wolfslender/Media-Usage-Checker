@@ -1,10 +1,10 @@
 <?php
 /*
 Plugin Name: Media Usage Checker
-Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress.
-Version: 1.0
+Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
+Version: 1.1
 Author: Alexis Olivero
-Author URI: https://www.oliverodev.com/
+author_uri: https://www.olivero.com/
 */
 
 if (!defined('ABSPATH')) {
@@ -31,7 +31,7 @@ function muc_admin_page() {
     ?>
     <div class="wrap">
         <h1>Media Usage Checker</h1>
-        <p>Esta herramienta te permite identificar archivos en la biblioteca de medios que están o no en uso en tu contenido de WordPress.</p>
+        <p>Esta herramienta te permite identificar y eliminar archivos en la biblioteca de medios que no están en uso en tu contenido de WordPress.</p>
 
         <?php
         // Obtener los archivos en uso y no en uso
@@ -55,7 +55,23 @@ function muc_admin_page() {
         <?php if (!empty($unused_media)) : ?>
             <ul>
                 <?php foreach ($unused_media as $media) : ?>
-                    <li><?php echo esc_html($media->post_title); ?> (ID: <?php echo esc_html($media->ID); ?>)</li>
+                    <?php
+                    // Obtener el tamaño del archivo en MB
+                    $file_path = get_attached_file($media->ID);
+                    $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
+                    $file_size = round($file_size, 2); // Redondear a 2 decimales
+                    ?>
+                    <li>
+                        <?php echo esc_html($media->post_title); ?> (ID: <?php echo esc_html($media->ID); ?>) -
+                        Tamaño: <?php echo esc_html($file_size); ?> MB
+
+                        <!-- Botón para eliminar -->
+                        <form method="post" style="display:inline;">
+                            <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
+                            <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
+                            <input type="submit" name="delete_media" value="Eliminar" class="button button-danger" onclick="return confirm('¿Estás seguro de que deseas eliminar este archivo?');">
+                        </form>
+                    </li>
                 <?php endforeach; ?>
             </ul>
         <?php else : ?>
@@ -104,5 +120,21 @@ function muc_check_media_usage() {
         'used' => $used_media,
         'unused' => $unused_media
     ];
+}
+
+// Acción para manejar la eliminación de archivos no utilizados
+add_action('admin_init', 'muc_handle_media_deletion');
+
+function muc_handle_media_deletion() {
+    if (isset($_POST['delete_media']) && isset($_POST['media_id']) && check_admin_referer('muc_delete_media', 'muc_nonce')) {
+        $media_id = intval($_POST['media_id']);
+
+        // Eliminar el archivo de la biblioteca de medios
+        wp_delete_attachment($media_id, true);
+
+        // Redirigir para evitar el reenvío de formularios
+        wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
+        exit;
+    }
 }
 ?>
