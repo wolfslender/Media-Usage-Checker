@@ -3,9 +3,9 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 1.1
+Version: 1.2
 Author: Alexis Olivero
-author_uri: https://www.olivero.com/
+Author URI: https://www.olivero.com/
 */
 
 if (!defined('ABSPATH')) {
@@ -27,35 +27,51 @@ function muc_add_admin_menu() {
     );
 }
 
+// Función para manejar la paginación
+function muc_get_paged_results($items, $page, $per_page) {
+    $total_items = count($items);
+    $offset = ($page - 1) * $per_page;
+    $paged_items = array_slice($items, $offset, $per_page);
+    $total_pages = ceil($total_items / $per_page);
+
+    return [
+        'items' => $paged_items,
+        'total_pages' => $total_pages
+    ];
+}
+
 // Función que muestra el contenido de la página del plugin
 function muc_admin_page() {
+    $used_page = isset($_GET['used_page']) ? max(1, intval($_GET['used_page'])) : 1;
+    $unused_page = isset($_GET['unused_page']) ? max(1, intval($_GET['unused_page'])) : 1;
+    $per_page = 20; // Elementos por página
+
+    // Obtener los archivos en uso y no en uso
+    $media_usage = muc_check_media_usage();
+    $used_media = muc_get_paged_results($media_usage['used'], $used_page, $per_page);
+    $unused_media = muc_get_paged_results($media_usage['unused'], $unused_page, $per_page);
+
     ?>
     <div class="wrap">
         <h1>Media Usage Checker</h1>
         <p>Esta herramienta te permite identificar y eliminar archivos en la biblioteca de medios que no están en uso en tu contenido de WordPress.</p>
 
-        <?php
-        // Obtener los archivos en uso y no en uso
-        $media_usage = muc_check_media_usage();
-        $used_media = $media_usage['used'];
-        $unused_media = $media_usage['unused'];
-        ?>
-
         <h2>Archivos en Uso</h2>
-        <?php if (!empty($used_media)) : ?>
+        <?php if (!empty($used_media['items'])) : ?>
             <ul>
-                <?php foreach ($used_media as $media) : ?>
+                <?php foreach ($used_media['items'] as $media) : ?>
                     <li><?php echo esc_html($media->post_title); ?> (ID: <?php echo esc_html($media->ID); ?>)</li>
                 <?php endforeach; ?>
             </ul>
+            <?php muc_display_pagination($used_page, $used_media['total_pages'], 'used_page'); ?>
         <?php else : ?>
             <p>No se encontraron archivos en uso.</p>
         <?php endif; ?>
 
         <h2>Archivos No en Uso</h2>
-        <?php if (!empty($unused_media)) : ?>
+        <?php if (!empty($unused_media['items'])) : ?>
             <ul>
-                <?php foreach ($unused_media as $media) : ?>
+                <?php foreach ($unused_media['items'] as $media) : ?>
                     <?php
                     // Obtener el tamaño del archivo en MB
                     $file_path = get_attached_file($media->ID);
@@ -75,11 +91,27 @@ function muc_admin_page() {
                     </li>
                 <?php endforeach; ?>
             </ul>
+            <?php muc_display_pagination($unused_page, $unused_media['total_pages'], 'unused_page'); ?>
         <?php else : ?>
             <p>No se encontraron archivos sin uso.</p>
         <?php endif; ?>
     </div>
     <?php
+}
+
+// Función para mostrar la paginación
+function muc_display_pagination($current_page, $total_pages, $page_param) {
+    if ($total_pages <= 1) {
+        return;
+    }
+    
+    echo '<div class="pagination" style="margin-top: 20px;">';
+    for ($i = 1; $i <= $total_pages; $i++) {
+        $url = add_query_arg($page_param, $i);
+        $class = ($i == $current_page) ? ' class="current-page"' : '';
+        echo "<a href='" . esc_url($url) . "'$class>$i</a> ";
+    }
+    echo '</div>';
 }
 
 // Función para verificar el uso de archivos en la biblioteca de medios
