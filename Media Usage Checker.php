@@ -2,14 +2,21 @@
 /*
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
-Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan. Ahora incluye una papelera para recuperación.
+Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
 Version: 1.3
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
 
 if (!defined('ABSPATH')) {
-    exit; // Salir si se accede directamente
+    exit;
+}
+
+// Agregar opción para la papelera al activar el plugin
+register_activation_hook(__FILE__, 'muc_plugin_activate');
+
+function muc_plugin_activate() {
+    add_option('muc_trash_items', array());
 }
 
 // Añadir el menú al panel de administración
@@ -17,13 +24,23 @@ add_action('admin_menu', 'muc_add_admin_menu');
 
 function muc_add_admin_menu() {
     add_menu_page(
-        'Media Usage Checker', // Título de la página
-        'Media Usage Checker', // Nombre del menú
-        'manage_options', // Capacidad requerida
-        'media-usage-checker', // Slug de la página
-        'muc_admin_page', // Función que mostrará el contenido
-        'dashicons-media-spreadsheet', // Icono del menú
-        25 // Posición del menú
+        'Media Usage Checker',
+        'Media Usage Checker',
+        'manage_options',
+        'media-usage-checker',
+        'muc_admin_page',
+        'dashicons-media-spreadsheet',
+        25
+    );
+
+    // Agregar submenú para la papelera
+    add_submenu_page(
+        'media-usage-checker',
+        'Papelera de Medios',
+        'Papelera',
+        'manage_options',
+        'media-usage-trash',
+        'muc_trash_page'
     );
 }
 
@@ -40,120 +57,12 @@ function muc_get_paged_results($items, $page, $per_page) {
     ];
 }
 
-// Función que muestra el contenido de la página del plugin
-function muc_admin_page() {
-    $used_page = isset($_GET['used_page']) ? max(1, intval($_GET['used_page'])) : 1;
-    $unused_page = isset($_GET['unused_page']) ? max(1, intval($_GET['unused_page'])) : 1;
-    $trash_page = isset($_GET['trash_page']) ? max(1, intval($_GET['trash_page'])) : 1;
-    $per_page = 20; // Elementos por página
-
-    // Obtener los archivos en uso y no en uso
-    $media_usage = muc_check_media_usage();
-    $used_media = muc_get_paged_results($media_usage['used'], $used_page, $per_page);
-    $unused_media = muc_get_paged_results($media_usage['unused'], $unused_page, $per_page);
-    $trash_media = muc_get_paged_results(muc_get_trash_media(), $trash_page, $per_page);
-
-    ?>
-    <div class="wrap">
-        <h1>Media Usage Checker</h1>
-        <p>Esta herramienta te permite identificar, restaurar o eliminar archivos en la biblioteca de medios que no están en uso en tu contenido de WordPress.</p>
-
-        <h2>Archivos en Uso</h2>
-        <?php if (!empty($used_media['items'])) : ?>
-            <ul>
-                <?php foreach ($used_media['items'] as $media) : ?>
-                    <li><?php echo esc_html($media->post_title); ?> (ID: <?php echo esc_html($media->ID); ?>)</li>
-                <?php endforeach; ?>
-            </ul>
-            <?php muc_display_pagination($used_page, $used_media['total_pages'], 'used_page'); ?>
-        <?php else : ?>
-            <p>No se encontraron archivos en uso.</p>
-        <?php endif; ?>
-
-        <h2>Archivos No en Uso</h2>
-        <?php if (!empty($unused_media['items'])) : ?>
-            <ul>
-                <?php foreach ($unused_media['items'] as $media) : ?>
-                    <?php
-                    $file_path = get_attached_file($media->ID);
-                    $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
-                    $file_size = round($file_size, 2);
-                    ?>
-                    <li>
-                        <?php echo esc_html($media->post_title); ?> (ID: <?php echo esc_html($media->ID); ?>) -
-                        Tamaño: <?php echo esc_html($file_size); ?> MB
-                        <form method="post" style="display:inline;">
-                            <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
-                            <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
-                            <input type="submit" name="move_to_trash" value="Mover a Papelera" class="button button-danger" onclick="return confirm('¿Mover a la papelera?');">
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-            <?php muc_display_pagination($unused_page, $unused_media['total_pages'], 'unused_page'); ?>
-        <?php else : ?>
-            <p>No se encontraron archivos sin uso.</p>
-        <?php endif; ?>
-
-        <h2>Archivos en la Papelera</h2>
-        <?php if (!empty($trash_media['items'])) : ?>
-            <ul>
-                <?php foreach ($trash_media['items'] as $media) : ?>
-                    <li>
-                        <?php echo esc_html($media->post_title); ?> (ID: <?php echo esc_html($media->ID); ?>)
-                        <form method="post" style="display:inline;">
-                            <?php wp_nonce_field('muc_restore_media', 'muc_nonce'); ?>
-                            <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
-                            <input type="submit" name="restore_media" value="Restaurar" class="button button-primary">
-                        </form>
-                        <form method="post" style="display:inline;">
-                            <?php wp_nonce_field('muc_delete_permanent', 'muc_nonce'); ?>
-                            <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
-                            <input type="submit" name="delete_permanent" value="Eliminar Permanentemente" class="button button-danger" onclick="return confirm('¿Eliminar permanentemente?');">
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-            <?php muc_display_pagination($trash_page, $trash_media['total_pages'], 'trash_page'); ?>
-        <?php else : ?>
-            <p>No hay archivos en la papelera.</p>
-        <?php endif; ?>
-    </div>
-    <?php
-}
-
-// Función para obtener los archivos en la papelera
-function muc_get_trash_media() {
-    return get_posts([
-        'post_type' => 'attachment',
-        'post_status' => 'trash',
-        'posts_per_page' => -1
-    ]);
-}
-
-// Función para manejar las solicitudes de mover, restaurar o eliminar archivos
-add_action('admin_init', 'muc_handle_media_actions');
-
-function muc_handle_media_actions() {
-    if (isset($_POST['move_to_trash']) && check_admin_referer('muc_delete_media', 'muc_nonce')) {
-        $media_id = intval($_POST['media_id']);
-        wp_trash_post($media_id);
-    } elseif (isset($_POST['restore_media']) && check_admin_referer('muc_restore_media', 'muc_nonce')) {
-        $media_id = intval($_POST['media_id']);
-        wp_untrash_post($media_id);
-    } elseif (isset($_POST['delete_permanent']) && check_admin_referer('muc_delete_permanent', 'muc_nonce')) {
-        $media_id = intval($_POST['media_id']);
-        wp_delete_attachment($media_id, true);
-    }
-    wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
-    exit;
-}
-
 // Función para mostrar la paginación
 function muc_display_pagination($current_page, $total_pages, $page_param) {
     if ($total_pages <= 1) {
         return;
     }
+    
     echo '<div class="pagination" style="margin-top: 20px;">';
     for ($i = 1; $i <= $total_pages; $i++) {
         $url = add_query_arg($page_param, $i);
@@ -163,9 +72,286 @@ function muc_display_pagination($current_page, $total_pages, $page_param) {
     echo '</div>';
 }
 
+// Función para mover un archivo a la papelera
+function muc_move_to_trash($media_id) {
+    $trash_items = get_option('muc_trash_items', array());
+    
+    $media_info = array(
+        'id' => $media_id,
+        'title' => get_the_title($media_id),
+        'url' => wp_get_attachment_url($media_id),
+        'date_trashed' => current_time('mysql'),
+        'file_path' => get_attached_file($media_id)
+    );
+    
+    $trash_items[] = $media_info;
+    update_option('muc_trash_items', $trash_items);
+    
+    // Ocultar el archivo pero no eliminarlo
+    wp_update_post(array(
+        'ID' => $media_id,
+        'post_status' => 'trash'
+    ));
+}
+
+// Función para restaurar un archivo de la papelera
+function muc_restore_from_trash($media_id) {
+    $trash_items = get_option('muc_trash_items', array());
+    
+    // Eliminar de la lista de papelera
+    $trash_items = array_filter($trash_items, function($item) use ($media_id) {
+        return $item['id'] != $media_id;
+    });
+    
+    update_option('muc_trash_items', $trash_items);
+    
+    // Restaurar el estado del archivo
+    wp_update_post(array(
+        'ID' => $media_id,
+        'post_status' => 'inherit'
+    ));
+}
+
+// Función que muestra el contenido de la página principal del plugin
+function muc_admin_page() {
+    $used_page = isset($_GET['used_page']) ? max(1, intval($_GET['used_page'])) : 1;
+    $unused_page = isset($_GET['unused_page']) ? max(1, intval($_GET['unused_page'])) : 1;
+    $per_page = 20;
+
+    $media_usage = muc_check_media_usage();
+    $used_media = muc_get_paged_results($media_usage['used'], $used_page, $per_page);
+    $unused_media = muc_get_paged_results($media_usage['unused'], $unused_page, $per_page);
+
+    ?>
+    <div class="wrap">
+        <h1>Media Usage Checker</h1>
+        <p>Esta herramienta te permite identificar y mover a la papelera archivos en la biblioteca de medios que no están en uso.</p>
+
+        <h2>Archivos en Uso</h2>
+        <?php if (!empty($used_media['items'])) : ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th>Archivo</th>
+                        <th>ID</th>
+                        <th>Tamaño</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($used_media['items'] as $media) : ?>
+                        <?php
+                        $file_path = get_attached_file($media->ID);
+                        $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
+                        $file_size = round($file_size, 2);
+                        ?>
+                        <tr>
+                            <td><?php echo esc_html($media->post_title); ?></td>
+                            <td><?php echo esc_html($media->ID); ?></td>
+                            <td><?php echo esc_html($file_size); ?> MB</td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php muc_display_pagination($used_page, $used_media['total_pages'], 'used_page'); ?>
+        <?php else : ?>
+            <p>No se encontraron archivos en uso.</p>
+        <?php endif; ?>
+
+        <h2>Archivos No en Uso</h2>
+        <?php if (!empty($unused_media['items'])) : ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th>Archivo</th>
+                        <th>ID</th>
+                        <th>Tamaño</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($unused_media['items'] as $media) : ?>
+                        <?php
+                        $file_path = get_attached_file($media->ID);
+                        $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
+                        $file_size = round($file_size, 2);
+                        ?>
+                        <tr>
+                            <td><?php echo esc_html($media->post_title); ?></td>
+                            <td><?php echo esc_html($media->ID); ?></td>
+                            <td><?php echo esc_html($file_size); ?> MB</td>
+                            <td>
+                                <form method="post" style="display:inline;">
+                                    <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
+                                    <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
+                                    <input type="submit" name="delete_media" value="Mover a papelera" class="button button-secondary">
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php muc_display_pagination($unused_page, $unused_media['total_pages'], 'unused_page'); ?>
+        <?php else : ?>
+            <p>No se encontraron archivos sin uso.</p>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
+// Página de la papelera
+function muc_trash_page() {
+    $trash_items = get_option('muc_trash_items', array());
+    ?>
+    <div class="wrap">
+        <h1>Papelera de Media Usage Checker</h1>
+        
+        <?php if (!empty($trash_items)) : ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th>Archivo</th>
+                        <th>Fecha de eliminación</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($trash_items as $item) : ?>
+                        <tr>
+                            <td><?php echo esc_html($item['title']); ?></td>
+                            <td><?php echo esc_html($item['date_trashed']); ?></td>
+                            <td>
+                                <form method="post" style="display:inline;">
+                                    <?php wp_nonce_field('muc_restore_media', 'muc_restore_nonce'); ?>
+                                    <input type="hidden" name="media_id" value="<?php echo esc_attr($item['id']); ?>">
+                                    <input type="submit" name="restore_media" value="Restaurar" class="button button-secondary">
+                                </form>
+                                
+                                <form method="post" style="display:inline; margin-left: 10px;">
+                                    <?php wp_nonce_field('muc_delete_permanent', 'muc_delete_permanent_nonce'); ?>
+                                    <input type="hidden" name="media_id" value="<?php echo esc_attr($item['id']); ?>">
+                                    <input type="submit" name="delete_permanent" value="Eliminar permanentemente" 
+                                        class="button button-danger" 
+                                        onclick="return confirm('¿Estás seguro de que deseas eliminar permanentemente este archivo?');">
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else : ?>
+            <p>No hay archivos en la papelera.</p>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
 // Función para verificar el uso de archivos en la biblioteca de medios
 function muc_check_media_usage() {
     global $wpdb;
-    $media_items = get_posts([
-       
 
+    $media_items = get_posts([
+        'post_type' => 'attachment',
+        'post_status' => 'inherit',
+        'posts_per_page' => -1
+    ]);
+
+    $unused_media = [];
+    $used_media = [];
+
+    foreach ($media_items as $media) {
+        $media_id = $media->ID;
+        $media_url = wp_get_attachment_url($media_id);
+
+        $is_used = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT ID FROM $wpdb->posts WHERE post_content LIKE %s LIMIT 1",
+                '%' . $wpdb->esc_like($media_url) . '%'
+            )
+        );
+
+        if ($is_used) {
+            $used_media[] = $media;
+        } else {
+            $unused_media[] = $media;
+        }
+    }
+
+    return [
+        'used' => $used_media,
+        'unused' => $unused_media
+    ];
+}
+
+// Manejar las acciones de la papelera
+function muc_handle_media_deletion() {
+    // Manejar el movimiento a la papelera
+    if (isset($_POST['delete_media']) && isset($_POST['media_id']) && 
+        check_admin_referer('muc_delete_media', 'muc_nonce')) {
+        $media_id = intval($_POST['media_id']);
+        muc_move_to_trash($media_id);
+        wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
+        exit;
+    }
+
+    // Manejar la restauración
+    if (isset($_POST['restore_media']) && isset($_POST['media_id']) && 
+        check_admin_referer('muc_restore_media', 'muc_restore_nonce')) {
+        $media_id = intval($_POST['media_id']);
+        muc_restore_from_trash($media_id);
+        wp_safe_redirect(admin_url('admin.php?page=media-usage-trash'));
+        exit;
+    }
+
+    // Manejar la eliminación permanente
+    if (isset($_POST['delete_permanent']) && isset($_POST['media_id']) && 
+        check_admin_referer('muc_delete_permanent', 'muc_delete_permanent_nonce')) {
+        $media_id = intval($_POST['media_id']);
+        
+        // Eliminar de la papelera
+        $trash_items = get_option('muc_trash_items', array());
+        $trash_items = array_filter($trash_items, function($item) use ($media_id) {
+            return $item['id'] != $media_id;
+        });
+        update_option('muc_trash_items', $trash_items);
+        
+        // Eliminar permanentemente
+        wp_delete_attachment($media_id, true);
+        
+        wp_safe_redirect(admin_url('admin.php?page=media-usage-trash'));
+        exit;
+    }
+}
+add_action('admin_init', 'muc_handle_media_deletion');
+
+// Agregar estilos CSS
+add_action('admin_head', 'muc_admin_styles');
+function muc_admin_styles() {
+    ?>
+    <style>
+        .pagination {
+            margin: 20px 0;
+        }
+        .pagination a {
+            padding: 5px 10px;
+            margin: 0 5px;
+            text-decoration: none;
+            border: 1px solid #ddd;
+            background: #f7f7f7;
+        }
+        .pagination a.current-page {
+            background: #0073aa;
+            color: white;
+            border-color: #0073aa;
+        }
+        .button-danger {
+            background: #dc3232 !important;
+            border-color: #dc3232 !important;
+            color: white !important;
+        }
+        .button-danger:hover {
+            background: #aa0000 !important;
+            border-color: #aa0000 !important;
+        }
+    </style>
+    <?php
+}
