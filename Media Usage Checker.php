@@ -33,13 +33,13 @@ function muc_add_admin_menu() {
         25
     );
 
-    // Agregar submenú para la papelera
+    // Agregar submenú para la papelera bajo "Media Usage Checker"
     add_submenu_page(
-        'media-usage-checker',
+        'media-usage-checker', // Este es el slug del menú padre
         'Papelera de Medios',
         'Papelera',
         'manage_options',
-        'media-usage-trash',
+        'muc_trash', // Asegúrate de que este slug sea consistente
         'muc_trash_page'
     );
 }
@@ -127,16 +127,6 @@ function muc_restore_from_trash($media_id) {
     ));
 }
 
-// Registra la página en el menú de administración
-add_action('admin_menu', function() {
-    add_menu_page(
-        'Papelera de Medios', // Título de la página
-        'Papelera', // Texto del menú
-        'manage_options', // Capacidad
-        'muc_trash', // Slug
-        'muc_trash_page' // Función que muestra el contenido
-    );
-});
 
 // Función para mostrar el contenido de la página de papelera
 function muc_trash_page() {
@@ -227,7 +217,6 @@ function muc_trash_page() {
         echo '</div>';
     }
 }
-
 
 
 // Función que muestra el contenido de la página principal del plugin
@@ -496,8 +485,6 @@ function muc_handle_media_deletion() {
     }
 }
 add_action('admin_init', 'muc_handle_media_deletion');
-
-
 
 // Agregar estilos CSS
 add_action('admin_head', 'muc_admin_styles');
