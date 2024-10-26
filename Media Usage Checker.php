@@ -129,6 +129,7 @@ function muc_admin_page() {
 
         <h2>Archivos en Uso</h2>
         <?php if (!empty($used_media['items'])) : ?>
+            <!-- Tabla de archivos en uso -->
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
@@ -159,91 +160,68 @@ function muc_admin_page() {
 
         <h2>Archivos No en Uso</h2>
         <?php if (!empty($unused_media['items'])) : ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th>Archivo</th>
-                        <th>ID</th>
-                        <th>Tamaño</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($unused_media['items'] as $media) : ?>
-                        <?php
-                        $file_path = get_attached_file($media->ID);
-                        $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
-                        $file_size = round($file_size, 2);
-                        ?>
+            <!-- Formulario para eliminación por lotes -->
+            <form method="post">
+                <?php wp_nonce_field('muc_bulk_delete', 'muc_bulk_nonce'); ?>
+                
+                <!-- Tabla de archivos no utilizados con checkbox -->
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
                         <tr>
-                            <td><?php echo esc_html($media->post_title); ?></td>
-                            <td><?php echo esc_html($media->ID); ?></td>
-                            <td><?php echo esc_html($file_size); ?> MB</td>
-                            <td>
-                                <form method="post" style="display:inline;">
-                                    <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
-                                    <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
-                                    <input type="submit" name="delete_media" value="Mover a papelera" class="button button-secondary">
-                                </form>
-                            </td>
+                            <th><input type="checkbox" id="select-all"></th>
+                            <th>Archivo</th>
+                            <th>ID</th>
+                            <th>Tamaño</th>
+                            <th>Acciones</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($unused_media['items'] as $media) : ?>
+                            <?php
+                            $file_path = get_attached_file($media->ID);
+                            $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
+                            $file_size = round($file_size, 2);
+                            ?>
+                            <tr>
+                                <td><input type="checkbox" name="selected_media[]" value="<?php echo esc_attr($media->ID); ?>"></td>
+                                <td><?php echo esc_html($media->post_title); ?></td>
+                                <td><?php echo esc_html($media->ID); ?></td>
+                                <td><?php echo esc_html($file_size); ?> MB</td>
+                                <td>
+                                    <form method="post" style="display:inline;">
+                                        <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
+                                        <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
+                                        <input type="submit" name="delete_media" value="Mover a papelera" class="button button-secondary">
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+
+                <!-- Botón para eliminación por lotes -->
+                <input type="submit" name="bulk_delete" value="Mover seleccionados a papelera" class="button button-primary">
+            </form>
+
+            <!-- Paginar archivos no utilizados -->
             <?php muc_display_pagination($unused_page, $unused_media['total_pages'], 'unused_page'); ?>
         <?php else : ?>
             <p>No se encontraron archivos sin uso.</p>
         <?php endif; ?>
     </div>
+
+    <!-- Script JavaScript para seleccionar todos los checkboxes -->
+    <script>
+        document.getElementById('select-all').addEventListener('click', function(event) {
+            let checkboxes = document.querySelectorAll('input[name="selected_media[]"]');
+            for (let checkbox of checkboxes) {
+                checkbox.checked = event.target.checked;
+            }
+        });
+    </script>
     <?php
 }
 
-// Página de la papelera
-function muc_trash_page() {
-    $trash_items = get_option('muc_trash_items', array());
-    ?>
-    <div class="wrap">
-        <h1>Papelera de Media Usage Checker</h1>
-        
-        <?php if (!empty($trash_items)) : ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th>Archivo</th>
-                        <th>Fecha de eliminación</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($trash_items as $item) : ?>
-                        <tr>
-                            <td><?php echo esc_html($item['title']); ?></td>
-                            <td><?php echo esc_html($item['date_trashed']); ?></td>
-                            <td>
-                                <form method="post" style="display:inline;">
-                                    <?php wp_nonce_field('muc_restore_media', 'muc_restore_nonce'); ?>
-                                    <input type="hidden" name="media_id" value="<?php echo esc_attr($item['id']); ?>">
-                                    <input type="submit" name="restore_media" value="Restaurar" class="button button-secondary">
-                                </form>
-                                
-                                <form method="post" style="display:inline; margin-left: 10px;">
-                                    <?php wp_nonce_field('muc_delete_permanent', 'muc_delete_permanent_nonce'); ?>
-                                    <input type="hidden" name="media_id" value="<?php echo esc_attr($item['id']); ?>">
-                                    <input type="submit" name="delete_permanent" value="Eliminar permanentemente" 
-                                        class="button button-danger" 
-                                        onclick="return confirm('¿Estás seguro de que deseas eliminar permanentemente este archivo?');">
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else : ?>
-            <p>No hay archivos en la papelera.</p>
-        <?php endif; ?>
-    </div>
-    <?php
-}
 
 // Función para verificar el uso de archivos en la biblioteca de medios
 function muc_check_media_usage() {
@@ -322,6 +300,17 @@ function muc_handle_media_deletion() {
     }
 }
 add_action('admin_init', 'muc_handle_media_deletion');
+
+// Manejar la eliminación por lotes
+if (isset($_POST['bulk_delete']) && check_admin_referer('muc_bulk_delete', 'muc_bulk_nonce')) {
+    if (!empty($_POST['selected_media']) && is_array($_POST['selected_media'])) {
+        foreach ($_POST['selected_media'] as $media_id) {
+            muc_move_to_trash(intval($media_id));
+        }
+    }
+    wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
+    exit;
+}
 
 // Agregar estilos CSS
 add_action('admin_head', 'muc_admin_styles');
