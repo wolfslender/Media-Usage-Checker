@@ -3,7 +3,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 1.3
+Version: 1.4
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
@@ -72,8 +72,13 @@ function muc_display_pagination($current_page, $total_pages, $page_param) {
     echo '</div>';
 }
 
-// Función para mover un archivo a la papelera
+/// Función para mover un archivo a la papelera
 function muc_move_to_trash($media_id) {
+    if (!$media_id || !is_int($media_id)) {
+        error_log("Invalid media ID provided to muc_move_to_trash: " . print_r($media_id, true));
+        return;
+    }
+    
     $trash_items = get_option('muc_trash_items', array());
     
     $media_info = array(
@@ -83,16 +88,27 @@ function muc_move_to_trash($media_id) {
         'date_trashed' => current_time('mysql'),
         'file_path' => get_attached_file($media_id)
     );
-    
+
+    // Si alguno de los datos es nulo o falla, muestra un error en el log
+    if (!$media_info['title'] || !$media_info['url']) {
+        error_log("Failed to retrieve media info for ID: " . $media_id);
+        return;
+    }
+
     $trash_items[] = $media_info;
     update_option('muc_trash_items', $trash_items);
-    
+
     // Ocultar el archivo pero no eliminarlo
-    wp_update_post(array(
+    $result = wp_update_post(array(
         'ID' => $media_id,
         'post_status' => 'trash'
     ));
+
+    if (is_wp_error($result)) {
+        error_log("Failed to trash media ID: " . $media_id . ". Error: " . $result->get_error_message());
+    }
 }
+
 
 // Función para restaurar un archivo de la papelera
 function muc_restore_from_trash($media_id) {
@@ -262,7 +278,7 @@ function muc_check_media_usage() {
 
 // Manejar las acciones de la papelera
 function muc_handle_media_deletion() {
-    // Manejar el movimiento a la papelera
+    // Manejar el movimiento a la papelera individual
     if (isset($_POST['delete_media']) && isset($_POST['media_id']) && 
         check_admin_referer('muc_delete_media', 'muc_nonce')) {
         $media_id = intval($_POST['media_id']);
@@ -298,19 +314,30 @@ function muc_handle_media_deletion() {
         wp_safe_redirect(admin_url('admin.php?page=media-usage-trash'));
         exit;
     }
-}
-add_action('admin_init', 'muc_handle_media_deletion');
 
-// Manejar la eliminación por lotes
-if (isset($_POST['bulk_delete']) && check_admin_referer('muc_bulk_delete', 'muc_bulk_nonce')) {
-    if (!empty($_POST['selected_media']) && is_array($_POST['selected_media'])) {
-        foreach ($_POST['selected_media'] as $media_id) {
-            muc_move_to_trash(intval($media_id));
+    // Manejar la eliminación por lotes
+    if (isset($_POST['bulk_delete']) && check_admin_referer('muc_bulk_delete', 'muc_bulk_nonce')) {
+        if (!empty($_POST['selected_media']) && is_array($_POST['selected_media'])) {
+            error_log("Selected media IDs: " . print_r($_POST['selected_media'], true));
+            foreach ($_POST['selected_media'] as $media_id) {
+                $media_id = intval($media_id);
+                if ($media_id > 0) {
+                    error_log("Deleting media ID: " . $media_id);
+                    try {
+                        muc_move_to_trash($media_id);
+                    } catch (Exception $e) {
+                        error_log("Error deleting media ID: " . $media_id . " - " . $e->getMessage());
+                    }
+                } else {
+                    error_log("Invalid media ID: " . $media_id);
+                }
+            }
+            wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
+            exit;
         }
     }
-    wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
-    exit;
 }
+
 
 // Agregar estilos CSS
 add_action('admin_head', 'muc_admin_styles');
