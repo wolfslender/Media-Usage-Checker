@@ -169,8 +169,8 @@ function muc_admin_page() {
 
     ?>
     <div class="wrap">
-        <h1>Media Usage Checker</h1>
-        <p>Esta herramienta te permite identificar y mover a la papelera archivos en la biblioteca de medios que no están en uso.</p>
+        <h1>Media Usage Checker By Alexis Olivero - OliveroDev</h1>
+        <p>Esta herramienta te permite identificar y mover a la papelera archivos en la biblioteca de medios que no están en uso y fue creada para el departamento de Educacion de Puerto Rico.</p>
 
         <h2>Archivos en Uso</h2>
         <?php if (!empty($used_media['items'])) : ?>
