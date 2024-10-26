@@ -3,7 +3,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 1.0.0
+Version: 1.1.0
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
@@ -130,22 +130,32 @@ function muc_restore_from_trash($media_id) {
 // Función para mostrar el contenido de la página de papelera
 function muc_trash_page() {
     // Aquí puedes personalizar cómo quieres mostrar la página de papelera
-    echo '<h1>Página de Papelera</h1>';
-    echo '<p>Esta es la página de archivos movidos a la papelera.</p>';
+    echo '<h1 style="color: #333; font-size: 24px;">Papelera de Medios</h1>';
+    echo '<p style="color: #666;">Esta es la página de archivos movidos a la papelera.</p>';
     
     // Aquí puedes agregar más lógica para mostrar los archivos en la papelera
     $trash_items = get_option('muc_trash_items', array());
     
     if (!empty($trash_items)) {
-        echo '<ul>';
+        echo '<ul style="list-style-type: none; padding: 0;">';
         foreach ($trash_items as $item) {
-            echo '<li>' . esc_html($item['title']) . ' - <a href="' . esc_url($item['url']) . '">Ver Archivo</a></li>';
+            echo '<li style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9; border-radius: 4px;">';
+            echo '<strong>' . esc_html($item['title']) . '</strong> - ';
+            echo '<a href="' . esc_url($item['url']) . '" style="color: #0073aa; text-decoration: none;">Ver Archivo</a>';
+            echo ' - <form method="post" style="display:inline;">';
+            echo '<input type="hidden" name="media_id" value="' . esc_attr($item['id']) . '">';
+            echo wp_nonce_field('muc_restore_media', 'muc_restore_nonce', true, false);
+            echo '<input type="submit" name="restore_media" value="Restaurar" class="button button-secondary" style="margin-left: 10px;">';
+            echo '<input type="submit" name="delete_permanent" value="Eliminar Permanentemente" class="button button-danger" style="margin-left: 10px;">';
+            echo '</form>';
+            echo '</li>';
         }
         echo '</ul>';
     } else {
         echo '<p>No hay archivos en la papelera.</p>';
     }
 }
+
 
 // Función que muestra el contenido de la página principal del plugin
 function muc_admin_page() {
@@ -444,6 +454,42 @@ function muc_admin_styles() {
         .button-danger:hover {
             background: #aa0000 !important;
             border-color: #aa0000 !important;
+        }
+
+        .pagination {
+            margin: 20px 0;
+        }
+        .pagination a {
+            padding: 5px 10px;
+            margin: 0 5px;
+            text-decoration: none;
+            border: 1px solid #ddd;
+            background: #f7f7f7;
+        }
+        .pagination a.current-page {
+            background: #0073aa;
+            color: white;
+            border-color: #0073aa;
+        }
+        .button-danger {
+            background: #dc3232 !important;
+            border-color: #dc3232 !important;
+            color: white !important;
+        }
+        .button-danger:hover {
+            background: #aa0000 !important;
+            border-color: #aa0000 !important;
+        }
+        /* Nuevos estilos para la papelera */
+        .trash-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .trash-item strong {
+            color: #333;
         }
     </style>
     <?php

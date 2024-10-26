@@ -1,15 +1,14 @@
-# Changelog
+## Changelog
 
-## [1.0.0] - 2024-10-26
-### Added
-- Funcionalidad para mover archivos a la papelera.
-- Funcionalidad para restaurar archivos desde la papelera.
-- Interfaz de usuario mejorada con tablas y formularios.
-- Notificaciones para acciones exitosas o con errores.
+### 1.1.0 (26/10/2024)
+- Agregado estilos CSS personalizados para la página de papelera.
+- Mejoras en la usabilidad y diseño de la interfaz de usuario.
+- Corrección de errores menores y mejoras de rendimiento.
 
-### Fixed
-- Corrección de errores en la verificación de uso de archivos.
-- Mejora en la gestión de la papelera de medios.
+### 1.0.0 (26/10/2024)
+- Versión inicial del plugin.
+- Funcionalidad para identificar archivos en uso y no en uso en la biblioteca de medios.
+- Opción para mover archivos no utilizados a una papelera personalizada.
 
 ## [0.1.0] - 2024-01-01
 ### Added
