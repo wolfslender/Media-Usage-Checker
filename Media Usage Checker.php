@@ -3,7 +3,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 1.4
+Version: 1.7
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
@@ -72,15 +72,15 @@ function muc_display_pagination($current_page, $total_pages, $page_param) {
     echo '</div>';
 }
 
-/// Función para mover un archivo a la papelera
+// Función para mover un archivo a la papelera
 function muc_move_to_trash($media_id) {
     if (!$media_id || !is_int($media_id)) {
         error_log("Invalid media ID provided to muc_move_to_trash: " . print_r($media_id, true));
         return;
     }
-    
+
     $trash_items = get_option('muc_trash_items', array());
-    
+
     $media_info = array(
         'id' => $media_id,
         'title' => get_the_title($media_id),
@@ -109,23 +109,42 @@ function muc_move_to_trash($media_id) {
     }
 }
 
-
 // Función para restaurar un archivo de la papelera
 function muc_restore_from_trash($media_id) {
     $trash_items = get_option('muc_trash_items', array());
-    
+
     // Eliminar de la lista de papelera
     $trash_items = array_filter($trash_items, function($item) use ($media_id) {
         return $item['id'] != $media_id;
     });
-    
+
     update_option('muc_trash_items', $trash_items);
-    
+
     // Restaurar el estado del archivo
     wp_update_post(array(
         'ID' => $media_id,
         'post_status' => 'inherit'
     ));
+}
+
+// Función para mostrar el contenido de la página de papelera
+function muc_trash_page() {
+    // Aquí puedes personalizar cómo quieres mostrar la página de papelera
+    echo '<h1>Página de Papelera</h1>';
+    echo '<p>Esta es la página de archivos movidos a la papelera.</p>';
+    
+    // Aquí puedes agregar más lógica para mostrar los archivos en la papelera
+    $trash_items = get_option('muc_trash_items', array());
+    
+    if (!empty($trash_items)) {
+        echo '<ul>';
+        foreach ($trash_items as $item) {
+            echo '<li>' . esc_html($item['title']) . ' - <a href="' . esc_url($item['url']) . '">Ver Archivo</a></li>';
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>No hay archivos en la papelera.</p>';
+    }
 }
 
 // Función que muestra el contenido de la página principal del plugin
@@ -179,7 +198,7 @@ function muc_admin_page() {
             <!-- Formulario para eliminación por lotes -->
             <form method="post">
                 <?php wp_nonce_field('muc_bulk_delete', 'muc_bulk_nonce'); ?>
-                
+
                 <!-- Tabla de archivos no utilizados con checkbox -->
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
@@ -238,7 +257,6 @@ function muc_admin_page() {
     <?php
 }
 
-
 // Función para verificar el uso de archivos en la biblioteca de medios
 function muc_check_media_usage() {
     global $wpdb;
@@ -276,7 +294,7 @@ function muc_check_media_usage() {
     ];
 }
 
-// Agregar función para los mensajes de notificación (AGREGAR AQUÍ)
+// Agregar función para los mensajes de notificación 
 function muc_admin_notices() {
     if (isset($_GET['muc_message'])) {
         $message = sanitize_text_field($_GET['muc_message']);
@@ -309,12 +327,19 @@ function muc_admin_notices() {
 }
 add_action('admin_notices', 'muc_admin_notices');
 
-// Reemplazar la función existente muc_handle_media_deletion() con esta versión actualizada
+// Funcion handle_media versión actualizada
 function muc_handle_media_deletion() {
     // Manejar el movimiento a la papelera individual
     if (isset($_POST['delete_media']) && isset($_POST['media_id']) && 
         check_admin_referer('muc_delete_media', 'muc_nonce')) {
         $media_id = intval($_POST['media_id']);
+        
+        // Validar si el ID de medios es válido
+        if ($media_id <= 0) {
+            error_log("Invalid media ID provided: " . $media_id);
+            wp_die("ID de medios no válido.");
+        }
+
         muc_move_to_trash($media_id);
         wp_safe_redirect(add_query_arg(
             array(
@@ -388,6 +413,7 @@ function muc_handle_media_deletion() {
     }
 }
 add_action('admin_init', 'muc_handle_media_deletion');
+
 
 
 // Agregar estilos CSS
