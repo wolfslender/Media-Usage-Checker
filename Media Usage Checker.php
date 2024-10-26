@@ -276,14 +276,54 @@ function muc_check_media_usage() {
     ];
 }
 
-// Manejar las acciones de la papelera
+// Agregar función para los mensajes de notificación (AGREGAR AQUÍ)
+function muc_admin_notices() {
+    if (isset($_GET['muc_message'])) {
+        $message = sanitize_text_field($_GET['muc_message']);
+        $type = isset($_GET['muc_type']) ? sanitize_text_field($_GET['muc_type']) : 'success';
+        $count = isset($_GET['muc_count']) ? intval($_GET['muc_count']) : 0;
+        
+        $class = 'notice notice-' . $type . ' is-dismissible';
+        
+        switch ($message) {
+            case 'bulk_delete_success':
+                $notice = sprintf(
+                    _n(
+                        'Se ha movido %d archivo a la papelera exitosamente.',
+                        'Se han movido %d archivos a la papelera exitosamente.',
+                        $count,
+                        'media-usage-checker'
+                    ),
+                    $count
+                );
+                break;
+            case 'bulk_delete_error':
+                $notice = __('Ha ocurrido un error al intentar mover los archivos a la papelera.', 'media-usage-checker');
+                break;
+            default:
+                return;
+        }
+        
+        printf('<div class="%1$s"><p>%2$s</p></div>', esc_attr($class), esc_html($notice));
+    }
+}
+add_action('admin_notices', 'muc_admin_notices');
+
+// Reemplazar la función existente muc_handle_media_deletion() con esta versión actualizada
 function muc_handle_media_deletion() {
     // Manejar el movimiento a la papelera individual
     if (isset($_POST['delete_media']) && isset($_POST['media_id']) && 
         check_admin_referer('muc_delete_media', 'muc_nonce')) {
         $media_id = intval($_POST['media_id']);
         muc_move_to_trash($media_id);
-        wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
+        wp_safe_redirect(add_query_arg(
+            array(
+                'page' => 'media-usage-checker',
+                'muc_message' => 'bulk_delete_success',
+                'muc_count' => 1
+            ),
+            admin_url('admin.php')
+        ));
         exit;
     }
 
@@ -318,25 +358,36 @@ function muc_handle_media_deletion() {
     // Manejar la eliminación por lotes
     if (isset($_POST['bulk_delete']) && check_admin_referer('muc_bulk_delete', 'muc_bulk_nonce')) {
         if (!empty($_POST['selected_media']) && is_array($_POST['selected_media'])) {
-            error_log("Selected media IDs: " . print_r($_POST['selected_media'], true));
+            $success_count = 0;
+            $has_errors = false;
+            
             foreach ($_POST['selected_media'] as $media_id) {
                 $media_id = intval($media_id);
                 if ($media_id > 0) {
-                    error_log("Deleting media ID: " . $media_id);
                     try {
                         muc_move_to_trash($media_id);
+                        $success_count++;
                     } catch (Exception $e) {
                         error_log("Error deleting media ID: " . $media_id . " - " . $e->getMessage());
+                        $has_errors = true;
                     }
-                } else {
-                    error_log("Invalid media ID: " . $media_id);
                 }
             }
-            wp_safe_redirect(admin_url('admin.php?page=media-usage-checker'));
+
+            // Preparar la redirección con el mensaje apropiado
+            $redirect_args = array(
+                'page' => 'media-usage-checker',
+                'muc_message' => ($success_count > 0) ? 'bulk_delete_success' : 'bulk_delete_error',
+                'muc_type' => ($has_errors) ? 'warning' : 'success',
+                'muc_count' => $success_count
+            );
+
+            wp_safe_redirect(add_query_arg($redirect_args, admin_url('admin.php')));
             exit;
         }
     }
 }
+add_action('admin_init', 'muc_handle_media_deletion');
 
 
 // Agregar estilos CSS
