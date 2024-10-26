@@ -1,15 +1,18 @@
-## Changelog
+# Changelog
 
-### 1.1.0 (26/10/2024)
-- Agregado estilos CSS personalizados para la página de papelera.
-- Mejoras en la usabilidad y diseño de la interfaz de usuario.
-- Corrección de errores menores y mejoras de rendimiento.
+## [1.2.0] - 2024-10-26
+### Añadido
+- Implementación de paginación en la página de la papelera.
+- Botón "Eliminar Archivos Permanentemente" para eliminar los archivos de la papelera.
 
-### 1.0.0 (26/10/2024)
-- Versión inicial del plugin.
-- Funcionalidad para identificar archivos en uso y no en uso en la biblioteca de medios.
-- Opción para mover archivos no utilizados a una papelera personalizada.
+### Cambiado
+- Mejora en la lógica de eliminación para que se eliminen los primeros 10 archivos según la paginación.
+- Redirección a la página de papelera después de eliminar archivos.
 
-## [0.1.0] - 25/10/2024
-### Added
-- Versión inicial del plugin con funcionalidad básica de verificación de uso de archivos.
+### Corregido
+- Solucionado el error de permisos al navegar a páginas posteriores en la papelera.
+- Corregido el comportamiento de redirección al eliminar archivos.
+
+## [1.1.0] - 2024-10-22
+### Añadido
+- Funcionalidad inicial del plugin para gestionar la papelera de medios.

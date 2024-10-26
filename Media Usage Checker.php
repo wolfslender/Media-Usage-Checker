@@ -3,7 +3,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 1.1.0
+Version: 1.2.0
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
@@ -127,18 +127,72 @@ function muc_restore_from_trash($media_id) {
     ));
 }
 
+// Registra la página en el menú de administración
+add_action('admin_menu', function() {
+    add_menu_page(
+        'Papelera de Medios', // Título de la página
+        'Papelera', // Texto del menú
+        'manage_options', // Capacidad
+        'muc_trash', // Slug
+        'muc_trash_page' // Función que muestra el contenido
+    );
+});
+
 // Función para mostrar el contenido de la página de papelera
 function muc_trash_page() {
-    // Aquí puedes personalizar cómo quieres mostrar la página de papelera
+    // Verifica si el usuario tiene permisos para acceder
+    if (!current_user_can('manage_options')) {
+        wp_die(__('Lo siento, no tienes permisos para acceder a esta página.'));
+    }
+
+    // Manejo de eliminación permanente de archivos
+    if (isset($_POST['delete_all_permanent'])) {
+        if (isset($_POST['muc_delete_nonce']) && wp_verify_nonce($_POST['muc_delete_nonce'], 'muc_delete_media')) {
+            // Obtener elementos de la papelera
+            $trash_items = get_option('muc_trash_items', array());
+
+            // Configurar paginación
+            $items_per_page = 10; 
+            $current_page = isset($_GET['paged']) ? (int)$_GET['paged'] : 1;
+            $offset = ($current_page - 1) * $items_per_page;
+
+            // Eliminar los primeros 10 elementos de la página actual
+            for ($i = $offset; $i < $offset + $items_per_page && $i < count($trash_items); $i++) {
+                unset($trash_items[$i]);
+            }
+            // Reindexar el array
+            $trash_items = array_values($trash_items);
+            update_option('muc_trash_items', $trash_items);
+
+            echo '<div class="notice notice-success"><p>Los archivos seleccionados han sido eliminados permanentemente.</p></div>';
+            wp_redirect(admin_url('admin.php?page=muc_trash&paged=' . $current_page));
+            exit;
+        } else {
+            echo '<div class="notice notice-error"><p>Error de seguridad. No se pudo eliminar los archivos.</p></div>';
+        }
+    }
+
+    // Título y mensaje de la página
     echo '<h1 style="color: #333; font-size: 24px;">Papelera de Medios</h1>';
     echo '<p style="color: #666;">Esta es la página de archivos movidos a la papelera.</p>';
     
-    // Aquí puedes agregar más lógica para mostrar los archivos en la papelera
+    // Obtener los elementos de la papelera
     $trash_items = get_option('muc_trash_items', array());
-    
-    if (!empty($trash_items)) {
+
+    // Configuración de paginación
+    $items_per_page = 10; 
+    $total_items = count($trash_items);
+    $total_pages = ceil($total_items / $items_per_page);
+    $current_page = isset($_GET['paged']) ? (int)$_GET['paged'] : 1;
+    $current_page = max(1, min($current_page, $total_pages));
+
+    // Obtener los elementos para la página actual
+    $offset = ($current_page - 1) * $items_per_page;
+    $paged_items = array_slice($trash_items, $offset, $items_per_page);
+
+    if (!empty($paged_items)) {
         echo '<ul style="list-style-type: none; padding: 0;">';
-        foreach ($trash_items as $item) {
+        foreach ($paged_items as $item) {
             echo '<li style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9; border-radius: 4px;">';
             echo '<strong>' . esc_html($item['title']) . '</strong> - ';
             echo '<a href="' . esc_url($item['url']) . '" style="color: #0073aa; text-decoration: none;">Ver Archivo</a>';
@@ -146,15 +200,34 @@ function muc_trash_page() {
             echo '<input type="hidden" name="media_id" value="' . esc_attr($item['id']) . '">';
             echo wp_nonce_field('muc_restore_media', 'muc_restore_nonce', true, false);
             echo '<input type="submit" name="restore_media" value="Restaurar" class="button button-secondary" style="margin-left: 10px;">';
-            echo '<input type="submit" name="delete_permanent" value="Eliminar Permanentemente" class="button button-danger" style="margin-left: 10px;">';
             echo '</form>';
             echo '</li>';
         }
         echo '</ul>';
+        
+        // Botón para eliminar los primeros 10 archivos permanentemente
+        echo '<form method="post" style="margin-top: 20px;">';
+        echo wp_nonce_field('muc_delete_media', 'muc_delete_nonce', true, false); // Añadir nonce para seguridad
+        echo '<input type="submit" name="delete_all_permanent" value="Eliminar Archivos Permanentemente" class="button button-danger" style="padding: 10px 15px;">';
+        echo '</form>';
     } else {
         echo '<p>No hay archivos en la papelera.</p>';
     }
+
+    // Paginación
+    if ($total_pages > 1) {
+        echo '<div class="pagination" style="margin-top: 20px;">';
+        for ($i = 1; $i <= $total_pages; $i++) {
+            if ($i == $current_page) {
+                echo '<span style="margin-right: 5px; font-weight: bold;">' . $i . '</span>'; // Página actual
+            } else {
+                echo '<a href="?page=muc_trash&paged=' . $i . '" style="margin-right: 5px; color: #0073aa; text-decoration: none;">' . $i . '</a>';
+            }
+        }
+        echo '</div>';
+    }
 }
+
 
 
 // Función que muestra el contenido de la página principal del plugin
