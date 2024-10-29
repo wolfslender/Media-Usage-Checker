@@ -3,11 +3,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-<<<<<<< HEAD
-Version: 1.2.1
-=======
 Version: 1.2.0
->>>>>>> 023b09de9797f10f4fa8ca1a18bd8486675963ff
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
