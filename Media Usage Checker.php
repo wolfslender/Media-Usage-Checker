@@ -3,7 +3,11 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
+<<<<<<< HEAD
 Version: 1.2.1
+=======
+Version: 1.2.0
+>>>>>>> 023b09de9797f10f4fa8ca1a18bd8486675963ff
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
@@ -423,6 +427,7 @@ function muc_handle_media_deletion() {
         ));
         exit;
     }
+<<<<<<< HEAD
     if (isset($_POST['restore_media']) && isset($_POST['media_id']) && 
     check_admin_referer('muc_restore_media', 'muc_restore_nonce')) {
     $media_id = intval($_POST['media_id']);
@@ -436,6 +441,17 @@ function muc_handle_media_deletion() {
         error_log("Invalid media ID for restoration: " . $media_id);
     }
 }
+=======
+
+    // Manejar la restauración
+    if (isset($_POST['restore_media']) && isset($_POST['media_id']) && 
+        check_admin_referer('muc_restore_media', 'muc_restore_nonce')) {
+        $media_id = intval($_POST['media_id']);
+        muc_restore_from_trash($media_id);
+        wp_safe_redirect(admin_url('admin.php?page=media-usage-trash'));
+        exit;
+    }
+>>>>>>> 023b09de9797f10f4fa8ca1a18bd8486675963ff
 
     // Manejar la eliminación permanente
     if (isset($_POST['delete_permanent']) && isset($_POST['media_id']) && 
