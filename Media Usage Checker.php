@@ -332,43 +332,6 @@ function muc_admin_page() {
     <?php
 }
 
-// Función para verificar si un medio está en uso (como imagen destacada o en contenido)
-function muc_esta_medio_en_uso($media_id) {
-    global $wpdb;
-    
-    // Obtener URL y nombre del archivo
-    $media_url = wp_get_attachment_url($media_id);
-    if (!$media_url) {
-        return false;
-    }
-    $media_filename = basename($media_url);
-    
-    // Verificar si el medio está usado como imagen destacada
-    $is_featured = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->postmeta 
-        WHERE meta_key = '_thumbnail_id' 
-        AND meta_value = %d",
-        $media_id
-    )) > 0;
-    
-    if ($is_featured) {
-        return true;
-    }
-    
-    // Verificar si el medio está usado en cualquier contenido
-    $is_used = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->posts 
-        WHERE post_type NOT IN ('attachment','revision') 
-        AND (post_content LIKE %s 
-        OR post_excerpt LIKE %s) 
-        LIMIT 1",
-        '%' . $wpdb->esc_like($media_url) . '%',
-        '%' . $wpdb->esc_like($media_filename) . '%'
-    )) > 0;
-    
-    return $is_used;
-}
-
 // Función para manejar la eliminación de medios
 function muc_handle_media_deletion() {
     // Manejar la eliminación individual
@@ -377,19 +340,6 @@ function muc_handle_media_deletion() {
         $media_id = intval($_POST['media_id']);
         
         if ($media_id > 0) {
-            // Verificar si el medio está en uso
-            if (muc_esta_medio_en_uso($media_id)) {
-                // Redirigir con mensaje de error
-                wp_safe_redirect(add_query_arg(
-                    array(
-                        'page' => 'media-usage-checker',
-                        'muc_message' => 'delete_failed_in_use'
-                    ),
-                    admin_url('admin.php')
-                ));
-                exit;
-            }
-
             $file = get_attached_file($media_id);
             $deleted = wp_delete_attachment($media_id, true);
             
