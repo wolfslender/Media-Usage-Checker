@@ -1,3 +1,15 @@
+## [2.3.7] - 2024-11-07
+
+### Added
+- New **"Preview"** column in the table to display a thumbnail of the image.
+- **"View Image"** button that opens the image in a new tab for easier access.
+
+### Changed
+- The button uses WordPress styling classes to maintain a consistent design.
+
+### Fixed
+- All existing functionalities have been preserved, ensuring application stability and consistency.
+
 ## [2.3.5] - 2024-11-1
 
 ### Added
