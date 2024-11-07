@@ -4,7 +4,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.olivero.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 2.3.6
+Version: 2.3.8
 Author: Alexis Olivero
 Author URI: https://www.olivero.com/
 */
@@ -285,6 +285,7 @@ function muc_admin_page() {
                             <th>ID</th>
                             <th>Tamaño</th>
                             <th>Fecha de Subida</th>
+                            <th>Vista Previa</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -295,6 +296,7 @@ function muc_admin_page() {
                             $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
                             $file_size = round($file_size, 2);
                             $upload_date = get_the_date('Y-m-d H:i:s', $media->ID);
+                            $media_url = wp_get_attachment_url($media->ID);
                             ?>
                             <tr>
                                 <td><input type="checkbox" name="selected_media[]" value="<?php echo esc_attr($media->ID); ?>"></td>
@@ -302,6 +304,11 @@ function muc_admin_page() {
                                 <td><?php echo esc_html($media->ID); ?></td>
                                 <td><?php echo esc_html($file_size); ?> MB</td>
                                 <td><?php echo esc_html($upload_date); ?></td>
+                                <td>
+                                    <a href="<?php echo esc_url($media_url); ?>" target="_blank" class="button button-secondary">
+                                        <?php echo esc_html(muc_get_file_type_text($media->ID)); ?>
+                                    </a>
+                                </td>
                                 <td>
                                     <form method="post" style="display:inline;">
                                         <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
@@ -332,6 +339,43 @@ function muc_admin_page() {
     <?php
 }
 
+// Función para verificar si un medio está en uso (como imagen destacada o en contenido)
+function muc_esta_medio_en_uso($media_id) {
+    global $wpdb;
+    
+    // Obtener URL y nombre del archivo
+    $media_url = wp_get_attachment_url($media_id);
+    if (!$media_url) {
+        return false;
+    }
+    $media_filename = basename($media_url);
+    
+    // Verificar si el medio está usado como imagen destacada
+    $is_featured = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->postmeta 
+        WHERE meta_key = '_thumbnail_id' 
+        AND meta_value = %d",
+        $media_id
+    )) > 0;
+    
+    if ($is_featured) {
+        return true;
+    }
+    
+    // Verificar si el medio está usado en cualquier contenido
+    $is_used = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->posts 
+        WHERE post_type NOT IN ('attachment','revision') 
+        AND (post_content LIKE %s 
+        OR post_excerpt LIKE %s) 
+        LIMIT 1",
+        '%' . $wpdb->esc_like($media_url) . '%',
+        '%' . $wpdb->esc_like($media_filename) . '%'
+    )) > 0;
+    
+    return $is_used;
+}
+
 // Función para manejar la eliminación de medios
 function muc_handle_media_deletion() {
     // Manejar la eliminación individual
@@ -340,6 +384,19 @@ function muc_handle_media_deletion() {
         $media_id = intval($_POST['media_id']);
         
         if ($media_id > 0) {
+            // Verificar si el medio está en uso
+            if (muc_esta_medio_en_uso($media_id)) {
+                // Redirigir con mensaje de error
+                wp_safe_redirect(add_query_arg(
+                    array(
+                        'page' => 'media-usage-checker',
+                        'muc_message' => 'delete_failed_in_use'
+                    ),
+                    admin_url('admin.php')
+                ));
+                exit;
+            }
+
             $file = get_attached_file($media_id);
             $deleted = wp_delete_attachment($media_id, true);
             
@@ -479,6 +536,41 @@ function muc_admin_styles() {
         }
     </style>
     <?php
+}
+
+// Agregar esta nueva función después de muc_admin_styles()
+function muc_get_file_type_text($media_id) {
+    $mime_type = get_post_mime_type($media_id);
+    $type_parts = explode('/', $mime_type);
+    $main_type = $type_parts[0];
+    $sub_type = $type_parts[1] ?? '';
+
+    switch ($main_type) {
+        case 'image':
+            return 'Ver imagen';
+        case 'video':
+            return 'Ver video';
+        case 'audio':
+            return 'Ver audio';
+        case 'application':
+            switch ($sub_type) {
+                case 'pdf':
+                    return 'Ver PDF';
+                case 'msword':
+                case 'vnd.openxmlformats-officedocument.wordprocessingml.document':
+                    return 'Ver documento';
+                case 'vnd.ms-excel':
+                case 'vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+                    return 'Ver Excel';
+                case 'vnd.ms-powerpoint':
+                case 'vnd.openxmlformats-officedocument.presentationml.presentation':
+                    return 'Ver PowerPoint';
+                default:
+                    return 'Ver archivo';
+            }
+        default:
+            return 'Ver archivo';
+    }
 }
 
 // Función para forzar una verificación manual
