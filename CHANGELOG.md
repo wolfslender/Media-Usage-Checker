@@ -1,3 +1,20 @@
+## [2.3.8] - 2024-11-07
+
+### Added
+- New function `muc_get_file_type_text()` that determines the file type based on its MIME type.
+- Support for different common file types, including:
+  - Images
+  - Videos
+  - Audio files
+  - PDFs
+  - Word documents
+  - Excel spreadsheets
+  - PowerPoint presentations
+- Displays a generic "View file" text for unrecognized file types.
+
+### Changed
+- Preserved existing functionality, but now displays more specific text depending on the file type.
+
 ## [2.3.7] - 2024-11-07
 
 ### Added
