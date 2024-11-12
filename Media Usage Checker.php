@@ -91,7 +91,6 @@ function muc_check_media_usage($batch_size = MUC_BATCH_SIZE, $offset = 0) {
         $unused_media = [];
         $used_media = [];
 
-        // Procesar en mini-lotes
         foreach (array_chunk($media_items, MUC_MINI_BATCH) as $chunk) {
             if (time() - $start_time >= MUC_TIME_LIMIT) {
                 break;
@@ -105,21 +104,21 @@ function muc_check_media_usage($batch_size = MUC_BATCH_SIZE, $offset = 0) {
                     $media_url = wp_get_attachment_url($media_id);
                     if (!$media_url) continue;
 
-                    // Consulta optimizada
-                    $is_used = $wpdb->get_var($wpdb->prepare(
-                        "SELECT ID FROM $wpdb->posts 
-                        WHERE post_type NOT IN ('attachment','revision') 
-                        AND (post_content LIKE %s 
-                        OR post_excerpt LIKE %s) 
-                        LIMIT 1",
-                        '%' . $wpdb->esc_like($media_url) . '%',
-                        '%' . $wpdb->esc_like(basename($media_url)) . '%'
-                    )) || muc_esta_medio_en_uso($media_id);
+                    // Verificar si el archivo existe físicamente
+                    $file_path = get_attached_file($media_id);
+                    if (!$file_path || !file_exists($file_path)) {
+                        continue;
+                    }
+
+                    $is_used = muc_esta_medio_en_uso($media_id);
 
                     if ($is_used) {
                         $used_media[] = $media;
                     } else {
-                        $unused_media[] = $media;
+                        // Solo añadir a unused si realmente existe el archivo
+                        if (filesize($file_path) > 0) {
+                            $unused_media[] = $media;
+                        }
                     }
 
                     // Limpiar memoria
@@ -132,7 +131,6 @@ function muc_check_media_usage($batch_size = MUC_BATCH_SIZE, $offset = 0) {
                 }
             }
             
-            // Pausa entre mini-lotes
             usleep(MUC_SLEEP_TIME);
         }
 
@@ -222,6 +220,12 @@ function muc_admin_page() {
         $used_media = array_merge($used_media, $results['used'] ?? []);
         $unused_media = array_merge($unused_media, $results['unused'] ?? []);
     }
+
+    // Filtrar archivos que realmente existen
+    $unused_media = array_filter($unused_media, function($media) {
+        $file_path = get_attached_file($media->ID);
+        return $file_path && file_exists($file_path) && filesize($file_path) > 0;
+    });
 
     $used_media_paged = muc_get_paged_results($used_media, $used_page, $per_page);
     $unused_media_paged = muc_get_paged_results($unused_media, $unused_page, $per_page);
@@ -327,15 +331,6 @@ function muc_admin_page() {
             <p>No se encontraron archivos sin uso.</p>
         <?php endif; ?>
     </div>
-
-    <script>
-        document.getElementById('select-all').addEventListener('click', function(event) {
-            let checkboxes = document.querySelectorAll('input[name="selected_media[]"]');
-            for (let checkbox of checkboxes) {
-                checkbox.checked = event.target.checked;
-            }
-        });
-    </script>
     <?php
 }
 
@@ -350,7 +345,53 @@ function muc_esta_medio_en_uso($media_id) {
     }
     $media_filename = basename($media_url);
     
-    // Verificar si el medio está usado como imagen destacada
+    // 1. Verificación extendida de iconos del sitio
+    // Verificar favicon del sitio
+    $site_icon_id = get_option('site_icon');
+    if ($site_icon_id == $media_id) {
+        return true;
+    }
+
+    // Verificar iconos en opciones del tema
+    $theme_icons = [
+        'custom_logo',              // Logo personalizado
+        'site_logo',               // Logo del sitio
+        'mobile_logo',             // Logo móvil
+        'footer_logo',             // Logo del pie de página
+        'retina_logo',             // Logo retina
+        'favicon',                 // Favicon clásico
+        'apple_touch_icon',        // Icono para Apple
+        'mobile_icon',             // Icono móvil
+        'site_icon_png'            // Icono PNG del sitio
+    ];
+
+    foreach ($theme_icons as $icon_option) {
+        if (get_theme_mod($icon_option) == $media_id) {
+            return true;
+        }
+    }
+
+    // Verificar en meta opciones comunes de temas
+    $icon_meta_keys = [
+        '_custom_logo',
+        '_site_icon',
+        '_favicon',
+        '_mobile_icon',
+        '_apple_touch_icon'
+    ];
+
+    $icon_used = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->postmeta 
+        WHERE meta_key IN ('" . implode("','", $icon_meta_keys) . "')
+        AND meta_value = %d",
+        $media_id
+    )) > 0;
+
+    if ($icon_used) return true;
+
+    // 2. Continuar con el resto de verificaciones existentes...
+
+    // 2. Verificar si el medio está usado como imagen destacada
     $is_featured = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $wpdb->postmeta 
         WHERE meta_key = '_thumbnail_id' 
@@ -358,21 +399,64 @@ function muc_esta_medio_en_uso($media_id) {
         $media_id
     )) > 0;
     
-    if ($is_featured) {
-        return true;
-    }
+    if ($is_featured) return true;
     
-    // Verificar si el medio está usado en cualquier contenido
-    $is_used = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->posts 
-        WHERE post_type NOT IN ('attachment','revision') 
-        AND (post_content LIKE %s 
-        OR post_excerpt LIKE %s) 
-        LIMIT 1",
+    // 3. Verificar en opciones del tema y personalizador
+    $theme_mods = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->options 
+        WHERE (
+            option_name LIKE %s 
+            OR option_name LIKE %s
+        ) AND (
+            option_value LIKE %s 
+            OR option_value LIKE %s
+        )",
+        'theme_mods_%',
+        '%_options',
         '%' . $wpdb->esc_like($media_url) . '%',
         '%' . $wpdb->esc_like($media_filename) . '%'
     )) > 0;
+
+    if ($theme_mods) return true;
     
+    // 4. Verificar Elementor
+    $elementor_used = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->postmeta 
+        WHERE meta_key = '_elementor_data' 
+        AND (
+            meta_value LIKE %s 
+            OR meta_value LIKE %s
+            OR meta_value LIKE %s
+        )",
+        '%' . $wpdb->esc_like($media_url) . '%',
+        '%"id":' . $media_id . '%',
+        '%"url":"' . $wpdb->esc_like($media_url) . '"%'
+    )) > 0;
+    
+    if ($elementor_used) return true;
+    
+    // 5. Verificar en contenido general de posts
+    $is_used = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->posts 
+        WHERE post_type NOT IN ('attachment','revision') 
+        AND (
+            post_content LIKE %s 
+            OR post_content LIKE %s
+        ) LIMIT 1",
+        '%' . $wpdb->esc_like($media_url) . '%',
+        '%' . $wpdb->esc_like($media_filename) . '%'
+    )) > 0;
+
+    // 6. Verificar en widgets y sidebars
+    $widget_used = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->options 
+        WHERE option_name LIKE 'widget_%' 
+        AND option_value LIKE %s",
+        '%' . $wpdb->esc_like($media_url) . '%'
+    )) > 0;
+
+    if ($widget_used) return true;
+
     return $is_used;
 }
 
@@ -514,29 +598,28 @@ function muc_admin_notices() {
 }
 add_action('admin_notices', 'muc_admin_notices');
 
-// Agregar estilos CSS
-add_action('admin_head', 'muc_admin_styles');
-function muc_admin_styles() {
-    ?>
-    <style>
-        .pagination {
-            margin: 20px 0;
-        }
-        .pagination a {
-            padding: 5px 10px;
-            margin: 0 5px;
-            text-decoration: none;
-            border: 1px solid #ddd;
-            background: #f7f7f7;
-        }
-        .pagination a.current-page {
-            background: #0073aa;
-            color: white;
-            border-color: #0073aa;
-        }
-    </style>
-    <?php
+// Eliminar la función muc_admin_styles anterior y reemplazarla por:
+function muc_enqueue_admin_assets() {
+    $plugin_dir_url = plugin_dir_url(__FILE__);
+    
+    // Registrar y encolar CSS
+    wp_enqueue_style(
+        'muc-admin-styles',
+        $plugin_dir_url . 'assets/css/muc-admin.css',
+        [],
+        '2.3.8'
+    );
+
+    // Registrar y encolar JavaScript
+    wp_enqueue_script(
+        'muc-admin-scripts',
+        $plugin_dir_url . 'assets/js/muc-admin.js',
+        [],
+        '2.3.8',
+        true
+    );
 }
+add_action('admin_enqueue_scripts', 'muc_enqueue_admin_assets');
 
 // Agregar esta nueva función después de muc_admin_styles()
 function muc_get_file_type_text($media_id) {

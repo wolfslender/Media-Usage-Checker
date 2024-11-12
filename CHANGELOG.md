@@ -1,4 +1,4 @@
-## [2.3.8] - 2024-11-07
+## [2.3.7] - 2024-11-07
 
 ### Added
 - New function `muc_get_file_type_text()` that determines the file type based on its MIME type.

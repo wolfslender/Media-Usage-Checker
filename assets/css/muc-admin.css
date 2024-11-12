@@ -1,0 +1,16 @@
+
+.pagination {
+    margin: 20px 0;
+}
+.pagination a {
+    padding: 5px 10px;
+    margin: 0 5px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    background: #f7f7f7;
+}
+.pagination a.current-page {
+    background: #0073aa;
+    color: white;
+    border-color: #0073aa;
+}
