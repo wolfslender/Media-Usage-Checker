@@ -6,7 +6,7 @@ Plugin URI: https://www.oliverodev.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
 Version: 2.5.9
 Author: Alexis Olivero
-Author URI: https://www.oliverodev.com/
+Author URI: https://www.oliverodev.pages.dev/
 */
 
 if (!defined('ABSPATH')) {
