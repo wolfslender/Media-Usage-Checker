@@ -48,8 +48,35 @@
         },
 
         initForceCheck: function() {
-            $('input[name="muc_force_check"]').on('click', function() {
-                $(this).prop('disabled', true).val('Verificando...');
+            jQuery(document).ready(function($) {
+                // Verificar si hay una verificación en progreso
+                var isChecking = false;
+                
+                function checkProgress() {
+                    if (!isChecking) return;
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        data: {
+                            action: 'muc_check_progress',
+                            nonce: mucSettings.nonce
+                        },
+                        success: function(response) {
+                            if (response.is_checking) {
+                                setTimeout(checkProgress, 2000);
+                            } else {
+                                location.reload();
+                            }
+                        }
+                    });
+                }
+                
+                // Iniciar verificación cuando se hace clic en el botón
+                $('input[name="muc_force_check"]').click(function() {
+                    isChecking = true;
+                    $('.wrap').prepend('<div class="notice notice-info"><p>' + mucSettings.messages.checking + '</p></div>');
+                    setTimeout(checkProgress, 2000);
+                });
             });
         },
 

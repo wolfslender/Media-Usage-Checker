@@ -1,3 +1,31 @@
+# Changelog
+
+## [2.6.0] - 2025-05-17
+
+### Added
+- Enhanced cache system for faster media checks
+- Improved batch processing with increased batch size (100 items)
+- Preview button for used media files
+- Real-time progress monitoring system
+- Advanced error logging and reporting
+- Object caching for media check results
+
+### Changed
+- Optimized SQL queries for better performance
+- Reduced inter-batch sleep time to 100ms
+- Enhanced memory management during scans
+- Improved background processing system
+- Updated user interface with better progress indicators
+- Enhanced file preview functionality
+
+### Fixed
+- Memory handling for large media libraries
+- Background process status monitoring
+- Cache invalidation on media updates
+- Query performance in large databases
+- Progress indication accuracy
+- File path validation
+
 ## [2.5.9] - 2024-11-08
 
 ### Added

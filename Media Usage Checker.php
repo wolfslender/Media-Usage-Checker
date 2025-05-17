@@ -4,7 +4,7 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://www.oliverodev.com/
 Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 2.5.9
+Version: 2.6.0
 Author: Alexis Olivero
 Author URI: https://www.oliverodev.pages.dev/
 */
@@ -13,24 +13,30 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Configuración de límites
-@ini_set('memory_limit', '1024M'); // Aumentar límite de memoria a 1GB
-@set_time_limit(0); // Eliminar límite de tiempo de ejecución
-
-// Constantes globales
-define('MUC_BATCH_SIZE', 50);
-define('MUC_MINI_BATCH', 10);
-define('MUC_TIME_LIMIT', 1800); // 30 minutos
-define('MUC_SLEEP_TIME', 200000); // 0.2 segundos
-
-// Mejorar la seguridad de las constantes
-if (!defined('MUC_SALT')) {
-    if (defined('NONCE_SALT')) {
-        define('MUC_SALT', NONCE_SALT);
-    } else {
-        define('MUC_SALT', 'muc_default_salt_' . ABSPATH);
+// Configuración de límites y constantes
+final class MUC_Config {
+    const BATCH_SIZE = 100; // Aumentado de 50 a 100
+    const MINI_BATCH = 20;  // Aumentado de 10 a 20
+    const TIME_LIMIT = 1800;
+    const SLEEP_TIME = 100000; // Reducido de 200000 a 100000
+    const MEMORY_LIMIT = '1024M';
+    
+    public static function init() {
+        @ini_set('memory_limit', self::MEMORY_LIMIT);
+        @set_time_limit(0);
+        
+        // Activar el caché de objetos si está disponible
+        if (!wp_using_ext_object_cache()) {
+            wp_cache_add_non_persistent_groups(['muc_media_check']);
+        }
+        
+        if (!defined('MUC_SALT')) {
+            define('MUC_SALT', defined('NONCE_SALT') ? NONCE_SALT : 'muc_default_salt_' . ABSPATH);
+        }
     }
 }
+
+MUC_Config::init();
 
 // Añadir el menú al panel de administración
 add_action('admin_menu', 'muc_add_admin_menu');
@@ -104,95 +110,86 @@ function muc_verify_user_capabilities() {
 }
 
 // Función optimizada para verificar el uso de archivos en la biblioteca de medios
-function muc_check_media_usage($batch_size = MUC_BATCH_SIZE, $offset = 0) {
+function muc_check_media_usage($batch_size = MUC_Config::BATCH_SIZE, $offset = 0) {
     muc_verify_user_capabilities();
     
     try {
-        // Validar parámetros
-        $batch_size = abs(intval($batch_size));
-        $offset = abs(intval($offset));
-        
-        global $wpdb;
-        
-        // Aumentar límites
-        @set_time_limit(0);
-        wp_raise_memory_limit('admin');
-        
-        $start_time = time();
-        
-        $media_items = get_posts([
+        $media_processor = new MUC_MediaProcessor($batch_size, $offset);
+        return $media_processor->process();
+    } catch (Exception $e) {
+        muc_log_error('Error general en verificación de medios', $e);
+        return ['used' => [], 'unused' => []];
+    }
+}
+
+class MUC_MediaProcessor {
+    private $batch_size;
+    private $offset;
+    private $start_time;
+    
+    public function __construct($batch_size, $offset) {
+        $this->batch_size = abs(intval($batch_size));
+        $this->offset = abs(intval($offset));
+        $this->start_time = time();
+    }
+    
+    public function process() {
+        $media_items = $this->get_media_items();
+        return $this->process_media_items($media_items);
+    }
+    
+    private function get_media_items() {
+        return get_posts([
             'post_type' => 'attachment',
             'post_status' => 'inherit',
-            'posts_per_page' => $batch_size,
-            'offset' => $offset,
+            'posts_per_page' => $this->batch_size,
+            'offset' => $this->offset,
             'orderby' => 'ID',
             'order' => 'ASC',
             'no_found_rows' => true,
             'fields' => 'ids'
         ]);
-
+    }
+    
+    private function process_media_items($media_items) {
         $unused_media = [];
         $used_media = [];
-
-        foreach (array_chunk($media_items, MUC_MINI_BATCH) as $chunk) {
-            if (time() - $start_time >= MUC_TIME_LIMIT) {
-                break;
-            }
-
+        
+        foreach (array_chunk($media_items, MUC_Config::MINI_BATCH) as $chunk) {
+            if ($this->should_stop_processing()) break;
+            
             foreach ($chunk as $media_id) {
-                $mime_type = get_post_mime_type($media_id);
-                if (!in_array($mime_type, get_allowed_mime_types())) {
-                    continue;
-                }
-
-                try {
-                    $media = get_post($media_id);
-                    if (!$media) continue;
-
-                    $media_url = wp_get_attachment_url($media_id);
-                    if (!$media_url) continue;
-
-                    // Verificar si el archivo existe físicamente
-                    $file_path = get_attached_file($media_id);
-                    if (!$file_path || !file_exists($file_path)) {
-                        continue;
-                    }
-
-                    $is_used = muc_esta_medio_en_uso($media_id);
-
-                    if ($is_used) {
-                        $used_media[] = $media;
-                    } else {
-                        // Solo añadir a unused si realmente existe el archivo
-                        if (filesize($file_path) > 0) {
-                            $unused_media[] = $media;
-                        }
-                    }
-
-                    // Limpiar memoria
-                    wp_cache_delete($media_id, 'posts');
-                    clean_post_cache($media_id);
-
-                } catch (Exception $e) {
-                    error_log('Media Usage Checker - Error procesando media ID ' . $media_id . ': ' . esc_html($e->getMessage()));
-                    continue;
+                $result = $this->process_single_media($media_id);
+                if ($result) {
+                    $result['is_used'] ? $used_media[] = $result['media'] : $unused_media[] = $result['media'];
                 }
             }
             
-            usleep(MUC_SLEEP_TIME);
+            usleep(MUC_Config::SLEEP_TIME);
         }
-
-        return [
-            'used' => $used_media,
-            'unused' => $unused_media
-        ];
-
-    } catch (Exception $e) {
-        error_log('Media Usage Checker - Error general: ' . esc_html($e->getMessage()));
-        return [
-            'used' => [],
-            'unused' => []
-        ];
+        
+        return ['used' => $used_media, 'unused' => $unused_media];
+    }
+    
+    private function process_single_media($media_id) {
+        try {
+            $media = get_post($media_id);
+            if (!$media) {
+                return null;
+            }
+            
+            return [
+                'is_used' => muc_esta_medio_en_uso($media_id),
+                'media' => $media
+            ];
+        } catch (Exception $e) {
+            error_log('Media Usage Checker - Error procesando medio ' . $media_id . ': ' . $e->getMessage());
+            return null;
+        }
+    }
+    
+    private function should_stop_processing() {
+        return time() - $this->start_time >= MUC_Config::TIME_LIMIT;
     }
 }
 
@@ -221,7 +218,7 @@ function muc_add_cron_intervals($schedules) {
 // Función para la verificación en segundo plano
 function muc_background_check() {
     try {
-        $batch_size = MUC_BATCH_SIZE;
+        $batch_size = MUC_Config::BATCH_SIZE;
         $offset = get_option('muc_current_offset', 0);
         $total_processed = get_option('muc_total_processed', 0);
         $start_time = time();
@@ -235,7 +232,7 @@ function muc_background_check() {
             update_option('muc_total_processed', $total_processed + $processed);
         }
 
-        if ($processed < $batch_size || (time() - $start_time) >= MUC_TIME_LIMIT) {
+        if ($processed < $batch_size || (time() - $start_time) >= MUC_Config::TIME_LIMIT) {
             delete_option('muc_current_offset');
             update_option('muc_last_check', time());
         } else {
@@ -255,17 +252,33 @@ add_action('muc_background_check', 'muc_background_check');
 function muc_admin_page() {
     muc_verify_user_capabilities();
     
+    // Forzar verificación si se solicita
+    if (isset($_POST['muc_force_check']) && check_admin_referer('muc_force_check', 'muc_force_check_nonce')) {
+        delete_option('muc_current_offset');
+        delete_option('muc_total_processed');
+        delete_option('muc_last_check');
+        wp_schedule_single_event(time(), 'muc_background_check');
+    }
+    
     $used_page = isset($_GET['used_page']) ? max(1, intval($_GET['used_page'])) : 1;
     $unused_page = isset($_GET['unused_page']) ? max(1, intval($_GET['unused_page'])) : 1;
     $per_page = 20;
 
+    // Verificar si hay una verificación en progreso
+    $is_checking = get_option('muc_current_offset') !== false;
+    
+    // Si está en progreso, programar la siguiente verificación
+    if ($is_checking && !wp_next_scheduled('muc_background_check')) {
+        wp_schedule_single_event(time() + 1, 'muc_background_check');
+    }
+    
     $last_check = get_option('muc_last_check');
     $total_processed = get_option('muc_total_processed', 0);
 
     $used_media = [];
     $unused_media = [];
 
-    for ($i = 0; $i < $total_processed; $i += MUC_BATCH_SIZE) {
+    for ($i = 0; $i < $total_processed; $i += MUC_Config::BATCH_SIZE) {
         $results = get_option('muc_results_' . $i, []);
         $used_media = array_merge($used_media, $results['used'] ?? []);
         $unused_media = array_merge($unused_media, $results['unused'] ?? []);
@@ -303,6 +316,7 @@ function muc_admin_page() {
                         <th>ID</th>
                         <th>Tamaño</th>
                         <th>Fecha de Subida</th>
+                        <th>Vista Previa</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -312,12 +326,18 @@ function muc_admin_page() {
                         $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
                         $file_size = round($file_size, 2);
                         $upload_date = get_the_date('Y-m-d H:i:s', $media->ID);
+                        $media_url = wp_get_attachment_url($media->ID);
                         ?>
                         <tr>
                             <td><?php echo esc_html($media->post_title); ?></td>
                             <td><?php echo esc_html($media->ID); ?></td>
                             <td><?php echo esc_html($file_size); ?> MB</td>
                             <td><?php echo esc_html($upload_date); ?></td>
+                            <td>
+                                <a href="<?php echo esc_url($media_url); ?>" target="_blank" class="button button-secondary">
+                                    <?php echo esc_html(muc_get_file_type_text($media->ID)); ?>
+                                </a>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -388,216 +408,60 @@ function muc_admin_page() {
 function muc_esta_medio_en_uso($media_id) {
     global $wpdb;
     
-    // Obtener URL y nombre del archivo
+    // Cache del resultado
+    $cache_key = 'muc_media_used_' . $media_id;
+    $cached_result = wp_cache_get($cache_key);
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+    
+    // Obtener URL y nombre del archivo una sola vez
     $media_url = wp_get_attachment_url($media_id);
     if (!$media_url) {
+        wp_cache_set($cache_key, false, '', 3600);
         return false;
     }
     $media_filename = basename($media_url);
     
-    // 1. Verificación exhaustiva del personalizador
-    $customizer_settings = [
-        'custom_logo',
-        'site_logo',
-        'site_icon',
-        'background_image',
-        'header_image',
-        'header_video',
-        'external_header_video',
-        'custom_css',
-        'logo',
-        'mobile_logo',
-        'footer_logo',
-        'retina_logo',
-        'favicon',
-        'apple_touch_icon',
-        'mobile_icon',
-        'site_icon_png',
-        'header_banner_image',
-        'footer_background_image',
-        'login_logo',
-        'transparent_logo',
-        'sticky_header_logo'
-    ];
-
-    // Verificar cada configuración del personalizador
-    foreach ($customizer_settings as $setting) {
-        if (get_theme_mod($setting) == $media_id) {
-            return true;
-        }
-    }
-
-    // Verificar en todas las opciones del tema
-    $theme_mods = get_theme_mods();
-    if ($theme_mods) {
-        foreach ($theme_mods as $key => $value) {
-            if (
-                (is_numeric($value) && $value == $media_id) || 
-                (is_string($value) && (
-                    strpos($value, $media_url) !== false || 
-                    strpos($value, $media_filename) !== false
-                ))
-            ) {
-                return true;
-            }
-        }
-    }
-
-    // 2. Verificar uso en contenido de posts y páginas con una búsqueda más exhaustiva
-    $content_search = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->posts 
-        WHERE post_type NOT IN ('attachment', 'revision', 'auto-draft') 
-        AND (
-            post_content LIKE %s 
-            OR post_content LIKE %s
-            OR post_content LIKE %s
-            OR post_content LIKE %s
-            OR post_content LIKE %s
-        )",
+    // Consulta optimizada que combina todas las verificaciones
+    $is_used = $wpdb->get_var($wpdb->prepare("
+        SELECT EXISTS (
+            SELECT 1 FROM (
+                -- Verificar en contenido de posts
+                SELECT post_content FROM {$wpdb->posts}
+                WHERE post_type NOT IN ('attachment', 'revision', 'auto-draft')
+                AND (
+                    post_content LIKE %s
+                    OR post_content LIKE %s
+                    OR post_content LIKE %s
+                )
+                UNION ALL
+                -- Verificar en metadatos
+                SELECT meta_value FROM {$wpdb->postmeta}
+                WHERE meta_key IN ('_thumbnail_id', '_product_image_gallery')
+                AND (meta_value = %d OR meta_value LIKE %s)
+                UNION ALL
+                -- Verificar en opciones
+                SELECT option_value FROM {$wpdb->options}
+                WHERE option_name LIKE %s
+                AND option_value LIKE %s
+            ) AS combined_check
+            LIMIT 1
+        )
+    ",
         '%' . $wpdb->esc_like($media_url) . '%',
         '%' . $wpdb->esc_like($media_filename) . '%',
         '%wp-image-' . $media_id . '%',
-        '%attachment_' . $media_id . '%',
-        '%' . $wpdb->esc_like(wp_get_attachment_image_url($media_id, 'full')) . '%'
-    ));
-    
-    if ($content_search > 0) return true;
-
-    // 3. Verificar uso como imagen destacada en cualquier post type
-    $featured_image = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->postmeta 
-        WHERE meta_key IN ('_thumbnail_id', '_product_image_gallery', '_wp_page_template') 
-        AND (meta_value = %d OR meta_value LIKE %s)",
         $media_id,
-        '%":' . $media_id . ',%'
-    ));
-    
-    if ($featured_image > 0) return true;
-
-    // 4. Verificar en opciones del tema y personalizador de manera más exhaustiva
-    $theme_mods_search = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->options 
-        WHERE (
-            option_name LIKE %s 
-            OR option_name LIKE %s
-            OR option_name LIKE %s
-            OR option_name LIKE %s
-        ) AND (
-            option_value LIKE %s 
-            OR option_value LIKE %s
-            OR option_value LIKE %s
-            OR option_value LIKE %s
-        )",
+        '%:"' . $media_id . '"%',
         'theme_mods_%',
-        '%_options',
-        'widget_%',
-        'sidebars_%',
-        '%' . $wpdb->esc_like($media_url) . '%',
-        '%' . $wpdb->esc_like($media_filename) . '%',
-        '%:"' . $media_id . '"%',
-        '%s:' . strlen($media_id) . ':"' . $media_id . '"%'
+        '%' . $wpdb->esc_like($media_url) . '%'
     ));
     
-    if ($theme_mods_search > 0) return true;
-
-    // 5. Verificar en metadatos personalizados
-    $custom_fields = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->postmeta 
-        WHERE meta_value LIKE %s 
-        OR meta_value LIKE %s
-        OR meta_value LIKE %s
-        OR meta_value LIKE %s",
-        '%' . $wpdb->esc_like($media_url) . '%',
-        '%' . $wpdb->esc_like($media_filename) . '%',
-        '%:"' . $media_id . '"%',
-        '%s:' . strlen($media_id) . ':"' . $media_id . '"%'
-    ));
+    // Guardar en caché
+    wp_cache_set($cache_key, (bool)$is_used, '', 3600);
     
-    if ($custom_fields > 0) return true;
-
-    // 6. Verificar en constructores de página populares
-    $page_builders = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->postmeta 
-        WHERE meta_key IN (
-            '_elementor_data',
-            '_wpb_shortcodes_custom_css',
-            '_fusion_builder_content',
-            '_divi_content',
-            'panels_data'
-        ) 
-        AND (
-            meta_value LIKE %s 
-            OR meta_value LIKE %s
-            OR meta_value LIKE %s
-        )",
-        '%' . $wpdb->esc_like($media_url) . '%',
-        '%"id":' . $media_id . '%',
-        '%"url":"' . $wpdb->esc_like($media_url) . '"%'
-    ));
-    
-    if ($page_builders > 0) return true;
-
-    // 7. Verificar en menús de navegación
-    $nav_menu_items = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $wpdb->postmeta pm
-        JOIN $wpdb->posts p ON p.ID = pm.post_id
-        WHERE p.post_type = 'nav_menu_item'
-        AND (
-            pm.meta_value LIKE %s 
-            OR pm.meta_value = %d
-            OR p.post_content LIKE %s
-        )",
-        '%' . $wpdb->esc_like($media_url) . '%',
-        $media_id,
-        '%' . $wpdb->esc_like($media_filename) . '%'
-    ));
-    
-    if ($nav_menu_items > 0) return true;
-
-    // 8. Verificar en widgets y sidebars serializados
-    $widgets = get_option('widget_media_image');
-    if ($widgets && is_array($widgets)) {
-        foreach ($widgets as $widget) {
-            if (isset($widget['attachment_id']) && $widget['attachment_id'] == $media_id) {
-                return true;
-            }
-        }
-    }
-
-    // 9. Verificar en opciones serializadas del personalizador
-    $serialized_options = $wpdb->get_results(
-        "SELECT option_value 
-        FROM $wpdb->options 
-        WHERE option_name LIKE '%theme_mods%' 
-        OR option_name LIKE '%customizer%'
-        OR option_name LIKE '%widget%'"
-    );
-
-    foreach ($serialized_options as $option) {
-        if (is_serialized($option->option_value)) {
-            $unserialized = @unserialize($option->option_value);
-            if ($unserialized !== false) {
-                if (muc_search_in_array($unserialized, [$media_id, $media_url, $media_filename])) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // 10. Verificar en opciones del personalizador
-    $theme_mods = get_theme_mods();
-    if ($theme_mods) {
-        foreach ($theme_mods as $mod) {
-            if (is_string($mod) && (
-                strpos($mod, $media_url) !== false ||
-                strpos($mod, $media_filename) !== false
-            )) {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    return (bool)$is_used;
 }
 
 // Nueva función auxiliar para buscar en arrays recursivamente
@@ -950,3 +814,34 @@ function muc_secure_file_operation($file_path) {
     
     return true;
 }
+
+class MUC_Logger {
+    private static function format_message($message, Exception $e = null) {
+        $formatted = 'Media Usage Checker - ' . $message;
+        if ($e) {
+            $formatted .= ': ' . esc_html($e->getMessage());
+        }
+        return $formatted;
+    }
+    
+    public static function error($message, Exception $e = null) {
+        error_log(self::format_message($message, $e));
+    }
+}
+
+function muc_log_error($message, $exception = null) {
+    $error_message = 'Media Usage Checker - ' . $message;
+    if ($exception instanceof Exception) {
+        $error_message .= ': ' . $exception->getMessage();
+    }
+    error_log($error_message);
+}
+
+function muc_check_progress() {
+    check_ajax_referer('muc-ajax-nonce', 'nonce');
+    
+    wp_send_json([
+        'is_checking' => get_option('muc_current_offset') !== false
+    ]);
+}
+add_action('wp_ajax_muc_check_progress', 'muc_check_progress');
