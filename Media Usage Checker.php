@@ -2,9 +2,9 @@
 
 /*
 Plugin Name: Media Usage Checker
-Plugin URI: https://www.oliverodev.com/
-Description: Identifica qué archivos de la biblioteca de medios están en uso en el contenido de WordPress y permite eliminar los que no se usan.
-Version: 2.6.0
+Plugin URI: https://oliverodev.pages.dev/
+Description: Identifies which media library files are in use in WordPress content and allows you to delete unused ones.
+Version: 2.7.0
 Author: Alexis Olivero
 Author URI: https://www.oliverodev.pages.dev/
 */
@@ -296,27 +296,27 @@ function muc_admin_page() {
     ?>
     <div class="wrap">
         <h1>Media Usage Checker By Alexis Olivero - OliveroDev</h1>
-        <p>Esta herramienta te permite identificar y eliminar archivos en la biblioteca de medios que no están en uso.</p>
+        <p>This tool allows you to identify and delete unused files in the media library.</p>
 
         <?php if ($last_check): ?>
-            <p>Última verificación: <?php echo date('Y-m-d H:i:s', $last_check); ?></p>
+            <p>Last check: <?php echo date('Y-m-d H:i:s', $last_check); ?></p>
         <?php endif; ?>
 
         <form method="post">
             <?php wp_nonce_field('muc_force_check', 'muc_force_check_nonce'); ?>
-            <?php submit_button('Forzar verificación', 'secondary', 'muc_force_check'); ?>
+            <?php submit_button('Force Check', 'secondary', 'muc_force_check'); ?>
         </form>
 
-        <h2>Archivos en Uso</h2>
+        <h2>Files in Use</h2>
         <?php if (!empty($used_media_paged['items'])) : ?>
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th>Archivo</th>
+                        <th>File</th>
                         <th>ID</th>
-                        <th>Tamaño</th>
-                        <th>Fecha de Subida</th>
-                        <th>Vista Previa</th>
+                        <th>Size</th>
+                        <th>Upload Date</th>
+                        <th>Preview</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -344,10 +344,10 @@ function muc_admin_page() {
             </table>
             <?php muc_display_pagination($used_page, $used_media_paged['total_pages'], 'used_page'); ?>
         <?php else : ?>
-            <p>No se encontraron archivos en uso.</p>
+            <p>No files were found in use.</p>
         <?php endif; ?>
 
-        <h2>Archivos No en Uso</h2>
+        <h2>Files Not in Use</h2>
         <?php if (!empty($unused_media_paged['items'])) : ?>
             <form method="post">
                 <?php wp_nonce_field('muc_bulk_delete', 'muc_bulk_nonce'); ?>
@@ -355,12 +355,12 @@ function muc_admin_page() {
                     <thead>
                         <tr>
                             <th><input type="checkbox" id="select-all"></th>
-                            <th>Archivo</th>
+                            <th>File</th>
                             <th>ID</th>
-                            <th>Tamaño</th>
-                            <th>Fecha de Subida</th>
-                            <th>Vista Previa</th>
-                            <th>Acciones</th>
+                            <th>Size</th>
+                            <th>Upload Date</th>
+                            <th>Preview</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -387,18 +387,18 @@ function muc_admin_page() {
                                     <form method="post" style="display:inline;">
                                         <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
                                         <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
-                                        <input type="submit" name="delete_media" value="Eliminar" class="button button-secondary">
+                                        <input type="submit" name="delete_media" value="Delete" class="button button-secondary">
                                     </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-                <input type="submit" name="bulk_delete" value="Eliminar seleccionados" class="button button-primary">
+                <input type="submit" name="bulk_delete" value="Delete Selected" class="button button-primary">
             </form>
             <?php muc_display_pagination($unused_page, $unused_media_paged['total_pages'], 'unused_page'); ?>
         <?php else : ?>
-            <p>No se encontraron archivos sin uso.</p>
+            <p>No unused files found.</p>
         <?php endif; ?>
     </div>
     <?php
@@ -427,23 +427,51 @@ function muc_esta_medio_en_uso($media_id) {
     $is_used = $wpdb->get_var($wpdb->prepare("
         SELECT EXISTS (
             SELECT 1 FROM (
-                -- Verificar en contenido de posts
+                -- Verificar en contenido de posts y páginas
                 SELECT post_content FROM {$wpdb->posts}
-                WHERE post_type NOT IN ('attachment', 'revision', 'auto-draft')
+                WHERE post_type NOT IN ('attachment', 'revision', 'auto-draft', 'trash')
+                AND post_status NOT IN ('trash', 'auto-draft')
                 AND (
                     post_content LIKE %s
                     OR post_content LIKE %s
                     OR post_content LIKE %s
+                    OR post_content LIKE %s
                 )
                 UNION ALL
-                -- Verificar en metadatos
+                -- Verificar en metadatos (incluyendo constructores de páginas)
                 SELECT meta_value FROM {$wpdb->postmeta}
-                WHERE meta_key IN ('_thumbnail_id', '_product_image_gallery')
-                AND (meta_value = %d OR meta_value LIKE %s)
+                WHERE meta_key IN (
+                    '_thumbnail_id',
+                    '_product_image_gallery',
+                    '_elementor_data',
+                    '_wpb_shortcodes_custom_css',
+                    '_divi_builder_settings',
+                    '_fusion_builder_content',
+                    '_cornerstone_data',
+                    '_themify_builder_settings_json',
+                    '_oxygen_builder_data',
+                    '_fl_builder_data',
+                    '_wp_page_template',
+                    '_wp_attached_file'
+                )
+                AND (
+                    meta_value = %d 
+                    OR meta_value LIKE %s 
+                    OR meta_value LIKE %s
+                    OR meta_value LIKE %s
+                    OR meta_value LIKE %s
+                )
                 UNION ALL
-                -- Verificar en opciones
+                -- Verificar en opciones del tema y widgets
                 SELECT option_value FROM {$wpdb->options}
-                WHERE option_name LIKE %s
+                WHERE (
+                    option_name LIKE %s
+                    OR option_name LIKE %s
+                    OR option_name = 'site_icon'
+                    OR option_name = 'site_logo'
+                    OR option_name LIKE 'widget_%'
+                    OR option_name LIKE 'theme_mods_%'
+                )
                 AND option_value LIKE %s
             ) AS combined_check
             LIMIT 1
@@ -452,13 +480,44 @@ function muc_esta_medio_en_uso($media_id) {
         '%' . $wpdb->esc_like($media_url) . '%',
         '%' . $wpdb->esc_like($media_filename) . '%',
         '%wp-image-' . $media_id . '%',
+        '%wp-att-' . $media_id . '%',
         $media_id,
         '%:"' . $media_id . '"%',
+        '%s:' . strlen($media_id) . ':"' . $media_id . '"%',
+        '%' . $wpdb->esc_like('{"url":"' . $media_url) . '%',
+        '%' . $wpdb->esc_like('"background-image":"' . $media_url) . '%',
         'theme_mods_%',
+        'widget_%',
         '%' . $wpdb->esc_like($media_url) . '%'
     ));
+
+    // Verificaciones adicionales para constructores de páginas y plugins
+    if (!$is_used) {
+        // Verificar en CSS personalizado y bloques reutilizables
+        $custom_css = wp_get_custom_css();
+        if (strpos($custom_css, $media_url) !== false || strpos($custom_css, $media_filename) !== false) {
+            $is_used = true;
+        }
+        
+        // Verificar en bloques reutilizables
+        $reusable_blocks = get_posts([
+            'post_type' => 'wp_block',
+            'posts_per_page' => -1,
+            'post_status' => 'publish'
+        ]);
+        
+        foreach ($reusable_blocks as $block) {
+            if (
+                strpos($block->post_content, $media_url) !== false ||
+                strpos($block->post_content, 'wp-image-' . $media_id) !== false
+            ) {
+                $is_used = true;
+                break;
+            }
+        }
+    }
     
-    // Guardar en caché
+    // Guardar en caché por una hora
     wp_cache_set($cache_key, (bool)$is_used, '', 3600);
     
     return (bool)$is_used;
@@ -681,48 +740,48 @@ function muc_get_file_type_text($media_id) {
 
     switch ($main_type) {
         case 'image':
-            return 'Ver imagen';
+            return 'View image';
         case 'video':
-            return 'Ver video';
+            return 'View video';
         case 'audio':
             return 'Ver audio';
         case 'application':
             switch ($sub_type) {
                 case 'pdf':
-                    return 'Ver PDF';
+                    return 'View PDF';
                 case 'msword':
                 case 'vnd.openxmlformats-officedocument.wordprocessingml.document':
-                    return 'Ver documento';
+                    return 'View document';
                 case 'vnd.ms-excel':
                 case 'vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-                    return 'Ver Excel';
+                    return 'View Excel';
                 case 'vnd.ms-powerpoint':
                 case 'vnd.openxmlformats-officedocument.presentationml.presentation':
-                    return 'Ver PowerPoint';
+                    return 'View PowerPoint';
                 case 'zip':
                 case 'x-zip':
                 case 'x-zip-compressed':
-                    return 'Ver ZIP';
+                    return 'View ZIP';
                 case 'rar':
                 case 'x-rar':
                 case 'x-rar-compressed':
-                    return 'Ver RAR';
+                    return 'View RAR';
                 case 'x-7z-compressed':
-                    return 'Ver 7Z';
+                    return 'View 7Z';
                 case 'x-tar':
-                    return 'Ver TAR';
+                    return 'View TAR';
                 case 'gzip':
                 case 'x-gzip':
-                    return 'Ver GZIP';
+                    return 'View GZIP';
                 case 'x-msdownload':
                 case 'exe':
                 case 'x-exe':
-                    return 'Ver EXE';
+                    return 'View EXE';
                 default:
-                    return 'Ver archivo';
+                    return 'View archivo';
             }
         default:
-            return 'Ver archivo';
+            return 'View archivo';
     }
 }
 
