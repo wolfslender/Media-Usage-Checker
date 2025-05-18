@@ -15,13 +15,26 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Definir constantes del plugin
+define('MUC_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('MUC_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+// Cargar clases necesarias
+if (file_exists(MUC_PLUGIN_DIR . 'includes/class-muc-logger.php')) {
+    require_once MUC_PLUGIN_DIR . 'includes/class-muc-logger.php';
+}
+if (file_exists(MUC_PLUGIN_DIR . 'includes/class-muc-validator.php')) {
+    require_once MUC_PLUGIN_DIR . 'includes/class-muc-validator.php';
+}
+
 // Configuración de límites y constantes
 final class MUC_Config {
-    const BATCH_SIZE = 100; // Aumentado de 50 a 100
-    const MINI_BATCH = 20;  // Aumentado de 10 a 20
+    const BATCH_SIZE = 100;
+    const MINI_BATCH = 20;
     const TIME_LIMIT = 1800;
-    const SLEEP_TIME = 100000; // Reducido de 200000 a 100000
+    const SLEEP_TIME = 100000;
     const MEMORY_LIMIT = '1024M';
+    const LOG_FILE_SIZE_LIMIT = 1024 * 1024; // 1MB
     
     public static function init() {
         @ini_set('memory_limit', self::MEMORY_LIMIT);
@@ -35,10 +48,73 @@ final class MUC_Config {
         if (!defined('MUC_SALT')) {
             define('MUC_SALT', defined('NONCE_SALT') ? NONCE_SALT : 'muc_default_salt_' . ABSPATH);
         }
+        
+        // Inicializar logger
+        MUC_Logger::get_instance()->log('Plugin inicializado', 'info');
     }
 }
 
 MUC_Config::init();
+
+// Validar peticiones AJAX
+add_action('wp_ajax_muc_check_media', function() {
+    if (!check_ajax_referer('muc_check_media', 'nonce', false)) {
+        wp_send_json_error('Invalid nonce');
+        return;
+    }
+
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Insufficient permissions');
+        return;
+    }
+
+    try {
+        $validator = MUC_Validator::get_instance();
+        $batch_size = $validator->validate_batch_size($_POST['batch_size']);
+        $offset = $validator->validate_batch_size($_POST['offset']);
+
+        if (!$batch_size || !$offset) {
+            wp_send_json_error('Invalid parameters');
+        }
+
+        $result = muc_check_media_usage($batch_size, $offset);
+        wp_send_json_success($result);
+    } catch (Exception $e) {
+        MUC_Logger::get_instance()->log('Error en AJAX: ' . $e->getMessage(), 'error');
+        wp_send_json_error('Error interno');
+    }
+});
+
+// Validar peticiones de eliminación
+add_action('admin_post_muc_delete_media', function() {
+    check_admin_referer('muc_delete_media', 'muc_delete_media_nonce');
+
+    if (!current_user_can('manage_options')) {
+        wp_redirect(admin_url('admin.php?page=media-usage-checker&error=permissions'));
+        exit;
+    }
+
+    try {
+        $validator = MUC_Validator::get_instance();
+        $media_ids = isset($_POST['media_ids']) ? $_POST['media_ids'] : [];
+        $valid_ids = array_filter($media_ids, function($id) use ($validator) {
+            return $validator->validate_media_id($id);
+        });
+
+        if (empty($valid_ids)) {
+            wp_redirect(admin_url('admin.php?page=media-usage-checker&error=invalid_ids'));
+            exit;
+        }
+
+        muc_cleanup_unused_media($valid_ids);
+        wp_redirect(admin_url('admin.php?page=media-usage-checker&success=deleted'));
+        exit;
+    } catch (Exception $e) {
+        MUC_Logger::get_instance()->log('Error al eliminar medios: ' . $e->getMessage(), 'error');
+        wp_redirect(admin_url('admin.php?page=media-usage-checker&error=error'));
+        exit;
+    }
+});
 
 // Añadir el menú al panel de administración
 add_action('admin_menu', 'muc_add_admin_menu');
@@ -275,7 +351,7 @@ function muc_admin_page() {
     <div class="wrap muc-wrap">
         <div class="muc-header">
             <h1>Media Usage Checker</h1>
-            <p class="muc-version">Version 2.7.0</p>
+            <p class="muc-version">Version 2.8.0</p>
         </div>
 
         <nav class="muc-nav-tab-wrapper">
