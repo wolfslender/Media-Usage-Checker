@@ -509,87 +509,72 @@ function muc_display_settings() {
             </div>
 
             <div class="muc-setting-section">
-                <h3>Programación de Escaneo</h3>
+                <h3><?php _e('Scan Schedule', 'media-usage-checker'); ?></h3>
                 <table class="form-table">
                     <tr>
-                        <th scope="row">Frecuencia de Escaneo</th>
+                        <th scope="row"><?php _e('Scan Frequency', 'media-usage-checker'); ?></th>
                         <td>
                             <select name="muc_scan_frequency">
-                                <option value="hourly" <?php selected($scan_frequency, 'hourly'); ?>>Cada hora</option>
-                                <option value="twicedaily" <?php selected($scan_frequency, 'twicedaily'); ?>>Dos veces al día</option>
-                                <option value="daily" <?php selected($scan_frequency, 'daily'); ?>>Diariamente</option>
-                                <option value="weekly" <?php selected($scan_frequency, 'weekly'); ?>>Semanalmente</option>
+                                <option value="hourly" <?php selected($scan_frequency, 'hourly'); ?>><?php _e('Hourly', 'media-usage-checker'); ?></option>
+                                <option value="twicedaily" <?php selected($scan_frequency, 'twicedaily'); ?>><?php _e('Twice Daily', 'media-usage-checker'); ?></option>
+                                <option value="daily" <?php selected($scan_frequency, 'daily'); ?>><?php _e('Daily', 'media-usage-checker'); ?></option>
+                                <option value="weekly" <?php selected($scan_frequency, 'weekly'); ?>><?php _e('Weekly', 'media-usage-checker'); ?></option>
                             </select>
-                            <p class="description">Con qué frecuencia se realizará el escaneo automático de archivos.</p>
+                            <p class="description"><?php _e('How often the automatic file scan will be performed.', 'media-usage-checker'); ?></p>
                         </td>
                     </tr>
                 </table>
             </div>
 
             <div class="muc-setting-section">
-                <h3>Tipos de Archivo</h3>
+                <h3><?php _e('File Types', 'media-usage-checker'); ?></h3>
                 <table class="form-table">
                     <tr>
-                        <th scope="row">Incluir en el Escaneo</th>
+                        <th scope="row"><?php _e('Included File Types', 'media-usage-checker'); ?></th>
                         <td>
-                            <label>
-                                <input type="checkbox" 
-                                       name="muc_file_types[]" 
-                                       value="image" 
-                                       <?php checked(in_array('image', $file_types)); ?>>
-                                Imágenes (jpg, png, gif, etc.)
-                            </label><br>
-                            <label>
-                                <input type="checkbox" 
-                                       name="muc_file_types[]" 
-                                       value="document" 
-                                       <?php checked(in_array('document', $file_types)); ?>>
-                                Documentos (pdf, doc, docx, etc.)
-                            </label><br>
-                            <label>
-                                <input type="checkbox" 
-                                       name="muc_file_types[]" 
-                                       value="video" 
-                                       <?php checked(in_array('video', $file_types)); ?>>
-                                Videos (mp4, mov, etc.)
-                            </label><br>
-                            <label>
-                                <input type="checkbox" 
-                                       name="muc_file_types[]" 
-                                       value="audio" 
-                                       <?php checked(in_array('audio', $file_types)); ?>>
-                                Audio (mp3, wav, etc.)
-                            </label>
-                            <p class="description">Selecciona los tipos de archivo que deseas incluir en el escaneo.</p>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="muc-setting-section">
-                <h3>Notificaciones</h3>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">
-                            <label for="muc_email_notifications">Notificaciones por Email</label>
-                        </th>
-                        <td>
-                            <input type="email" 
-                                   id="muc_email_notifications" 
-                                   name="muc_email_notifications" 
-                                   value="<?php echo esc_attr(get_option('muc_email_notifications')); ?>" 
-                                   class="regular-text">
-                            <p class="description">Recibe notificaciones cuando se encuentren archivos sin usar (deja en blanco para desactivar).</p>
+                            <fieldset>
+                                <label>
+                                    <input type="checkbox" 
+                                           name="muc_file_types[]" 
+                                           value="image" 
+                                           <?php checked(in_array('image', $file_types)); ?>>
+                                    <?php _e('Images (jpg, png, gif, etc.)', 'media-usage-checker'); ?>
+                                </label>
+                                <br>
+                                <label>
+                                    <input type="checkbox" 
+                                           name="muc_file_types[]" 
+                                           value="document" 
+                                           <?php checked(in_array('document', $file_types)); ?>>
+                                    <?php _e('Documents (pdf, doc, docx, etc.)', 'media-usage-checker'); ?>
+                                </label>
+                                <br>
+                                <label>
+                                    <input type="checkbox" 
+                                           name="muc_file_types[]" 
+                                           value="video" 
+                                           <?php checked(in_array('video', $file_types)); ?>>
+                                    <?php _e('Videos (mp4, mov, avi, etc.)', 'media-usage-checker'); ?>
+                                </label>
+                                <br>
+                                <label>
+                                    <input type="checkbox" 
+                                           name="muc_file_types[]" 
+                                           value="audio" 
+                                           <?php checked(in_array('audio', $file_types)); ?>>
+                                    <?php _e('Audio (mp3, wav, ogg, etc.)', 'media-usage-checker'); ?>
+                                </label>
+                                <p class="description"><?php _e('Select which types of files to include in the scan.', 'media-usage-checker'); ?></p>
+                            </fieldset>
                         </td>
                     </tr>
                 </table>
             </div>
 
             <p class="submit">
-                <input type="submit" 
-                       name="muc_save_settings" 
-                       class="button button-primary" 
-                       value="Guardar Cambios">
+                <button type="submit" name="muc_save_settings" class="button button-primary">
+                    <?php _e('Save Settings', 'media-usage-checker'); ?>
+                </button>
             </p>
         </form>
     </div>

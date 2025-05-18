@@ -429,18 +429,28 @@
     width: 200px;
 }
 
-.muc-settings-form .description {
-    color: #666;
-    font-style: italic;
-    margin: 5px 0 0;
+.muc-settings-form label {
+    color: #1d2327;
+    font-size: 14px;
+    font-weight: normal;
+    margin-bottom: 8px;
+    display: inline-block;
 }
 
 .muc-settings-form input[type="checkbox"] + label {
+    color: #1d2327;
+    vertical-align: middle;
     margin-left: 8px;
 }
 
-.muc-settings-form label {
-    margin-bottom: 8px;
+.muc-settings-form .description {
+    color: #1d2327;
+    font-style: normal;
+    margin-top: 8px;
+}
+
+.muc-settings-form fieldset label {
+    margin: 8px 0;
     display: inline-block;
 }
 
