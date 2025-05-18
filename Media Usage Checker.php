@@ -15,11 +15,24 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Definir constantes del plugin
+// Define plugin constants
 define('MUC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MUC_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('MUC_VERSION', '2.8.0');
 
-// Cargar clases necesarias
+// Security constants
+define('MUC_NONCE_LIFETIME', DAY_IN_SECONDS);
+define('MUC_MAX_FILE_SIZE', 104857600); // 100MB
+define('MUC_MAX_EXECUTION_TIME', 300); // 5 minutos
+
+// Performance constants
+define('MUC_CACHE_GROUP', 'muc_cache');
+define('MUC_CACHE_EXPIRE', HOUR_IN_SECONDS);
+
+// Internationalization constants
+define('MUC_TEXT_DOMAIN', 'media-usage-checker');
+
+// Load required classes
 if (file_exists(MUC_PLUGIN_DIR . 'includes/class-muc-logger.php')) {
     require_once MUC_PLUGIN_DIR . 'includes/class-muc-logger.php';
 }
@@ -27,7 +40,7 @@ if (file_exists(MUC_PLUGIN_DIR . 'includes/class-muc-validator.php')) {
     require_once MUC_PLUGIN_DIR . 'includes/class-muc-validator.php';
 }
 
-// Configuración de límites y constantes
+// Configuration limits and constants
 final class MUC_Config {
     const BATCH_SIZE = 100;
     const MINI_BATCH = 20;
@@ -56,7 +69,7 @@ final class MUC_Config {
 
 MUC_Config::init();
 
-// Validar peticiones AJAX
+// Validate AJAX requests
 add_action('wp_ajax_muc_check_media', function() {
     if (!check_ajax_referer('muc_check_media', 'nonce', false)) {
         wp_send_json_error('Invalid nonce');
@@ -85,7 +98,7 @@ add_action('wp_ajax_muc_check_media', function() {
     }
 });
 
-// Validar peticiones de eliminación
+// Validate deletion requests
 add_action('admin_post_muc_delete_media', function() {
     check_admin_referer('muc_delete_media', 'muc_delete_media_nonce');
 
@@ -131,7 +144,7 @@ function muc_add_admin_menu() {
     );
 }
 
-// Función para manejar la paginación
+// Function to handle pagination
 function muc_get_paged_results($items, $page, $per_page) {
     $total_items = count($items);
     $offset = ($page - 1) * $per_page;
@@ -144,7 +157,7 @@ function muc_get_paged_results($items, $page, $per_page) {
     ];
 }
 
-// Función para mostrar la paginación
+// Function to display pagination
 function muc_display_pagination($current_page, $total_pages, $page_param) {
     if ($total_pages <= 1) {
         return;
@@ -159,7 +172,7 @@ function muc_display_pagination($current_page, $total_pages, $page_param) {
     echo '</div>';
 }
 
-// Función mejorada para sanitizar entradas
+// Improved function to sanitize inputs
 function muc_sanitize_data($data, $type = 'text') {
     switch($type) {
         case 'int':
@@ -175,19 +188,19 @@ function muc_sanitize_data($data, $type = 'text') {
     }
 }
 
-// Agregar nonces con tiempo de expiración
+// Add nonces with expiration time
 function muc_create_nonce($action) {
     return wp_create_nonce($action . '_' . MUC_SALT);
 }
 
-// Verificar capacidades de usuario de forma más estricta
+// More strictly verify user capabilities
 function muc_verify_user_capabilities() {
     if (!current_user_can('manage_options') || !current_user_can('upload_files')) {
         wp_die(__('No tienes permisos suficientes para acceder a esta página.', 'media-usage-checker'));
     }
 }
 
-// Función optimizada para verificar el uso de archivos en la biblioteca de medios
+// Optimized function to check media library file usage
 function muc_check_media_usage($batch_size = MUC_Config::BATCH_SIZE, $offset = 0) {
     muc_verify_user_capabilities();
     
@@ -271,7 +284,7 @@ class MUC_MediaProcessor {
     }
 }
 
-// Programar la verificación en segundo plano
+// Schedule background check
 function muc_schedule_background_check() {
     if (!wp_next_scheduled('muc_background_check')) {
         wp_schedule_event(time(), 'fifteen_minutes', 'muc_background_check');
@@ -279,7 +292,7 @@ function muc_schedule_background_check() {
 }
 add_action('wp', 'muc_schedule_background_check');
 
-// Añadir intervalos personalizados para WP-Cron
+// Add custom intervals for WP-Cron
 add_filter('cron_schedules', 'muc_add_cron_intervals');
 function muc_add_cron_intervals($schedules) {
     $schedules['fifteen_minutes'] = [
@@ -293,7 +306,7 @@ function muc_add_cron_intervals($schedules) {
     return $schedules;
 }
 
-// Función para la verificación en segundo plano
+// Function for background check
 function muc_background_check() {
     try {
         $batch_size = MUC_Config::BATCH_SIZE;
@@ -326,7 +339,7 @@ function muc_background_check() {
 }
 add_action('muc_background_check', 'muc_background_check');
 
-// Agregar estilos y scripts necesarios
+// Add necessary styles and scripts
 add_action('admin_enqueue_scripts', 'muc_enqueue_admin_assets');
 function muc_enqueue_admin_assets($hook) {
     if ('toplevel_page_media-usage-checker' !== $hook) {
@@ -342,7 +355,7 @@ function muc_enqueue_admin_assets($hook) {
     ));
 }
 
-// Función que muestra el contenido de la página principal del plugin
+// Function that displays the main plugin page content
 function muc_admin_page() {
     muc_verify_user_capabilities();
     
@@ -863,9 +876,24 @@ function muc_update_dashboard_stats() {
         update_option('muc_used_count', $used_count);
         update_option('muc_unused_count', $unused_count);
         update_option('muc_total_media', $total_media);
+        
+        // Incrementar el offset para la siguiente iteración
+        $offset += $batch_size;
+        
+        // Pequeña pausa para evitar sobrecargar el servidor
+        if (function_exists('usleep')) {
+            usleep(100000); // 100ms
+        }
     }
     
+    // Actualizar la última verificación
     update_option('muc_last_check', time());
+    
+    return [
+        'total' => $total_media,
+        'used' => $used_count,
+        'unused' => $unused_count
+    ];
 }
 
 // Agregar la actualización de estadísticas al escaneo forzado
@@ -876,3 +904,193 @@ add_action('admin_init', function() {
         exit;
     }
 });
+
+/**
+ * Checks if the plugin is active in a multisite network
+ * 
+ * @return bool True if active network-wide, false otherwise
+ */
+function muc_is_network_active() {
+    if (!is_multisite()) {
+        return false;
+    }
+    
+    $plugins = get_site_option('active_sitewide_plugins');
+    return isset($plugins[plugin_basename(__FILE__)]);
+}
+
+/**
+ * Logs errors to WordPress log
+ * 
+ * @param string $message Error message
+ * @param mixed $data Additional log data
+ * @return void
+ */
+function muc_log_error($message, $data = []) {
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        if (!empty($data)) {
+            if ($data instanceof Exception) {
+                $message .= ' ' . $data->getMessage();
+                $data = [
+                    'file' => $data->getFile(),
+                    'line' => $data->getLine(),
+                    'trace' => $data->getTraceAsString()
+                ];
+            }
+        }
+        MUC_Logger::get_instance()->log($message, 'error', $data);
+    }
+}
+
+/**
+ * Clears site cache
+ * 
+ * @return void
+ */
+function muc_clear_cache() {
+    // Clear WordPress cache
+    if (function_exists('wp_cache_flush')) {
+        wp_cache_flush();
+    }
+    
+    // Clear object cache if available
+    if (function_exists('wp_cache_clear_cache')) {
+        wp_cache_clear_cache();
+    }
+    
+    // Clear transients
+    global $wpdb;
+    $wpdb->query("DELETE FROM $wpdb->options WHERE option_name LIKE '\_transient\_%' OR option_name LIKE '\_site\_transient\_%'");
+    
+    // Allow other plugins to clear their cache
+    do_action('muc_after_clear_cache');
+}
+
+/**
+ * Initializes the REST API
+ * 
+ * @return void
+ */
+function muc_init_rest_api() {
+    add_action('rest_api_init', function() {
+        register_rest_route('media-usage-checker/v1', '/status', [
+            'methods' => 'GET',
+            'callback' => 'muc_rest_get_status',
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            }
+        ]);
+    });
+}
+add_action('init', 'muc_init_rest_api');
+
+/**
+ * Handles REST request to get plugin status
+ * 
+ * @param WP_REST_Request $request Request object
+ * @return WP_REST_Response API response
+ */
+function muc_rest_get_status($request) {
+    $response = [
+        'status' => 'success',
+        'data' => [
+            'version' => '2.8.0',
+            'total_media' => (int) wp_count_posts('attachment')->inherit,
+            'used_count' => (int) get_option('muc_used_count', 0),
+            'unused_count' => (int) get_option('muc_unused_count', 0),
+            'last_check' => get_option('muc_last_check') ? date('c', get_option('muc_last_check')) : null,
+            'memory_usage' => size_format(memory_get_usage(true)),
+            'memory_limit' => ini_get('memory_limit'),
+            'max_execution_time' => (int) ini_get('max_execution_time')
+        ]
+    ];
+
+    return new WP_REST_Response($response, 200);
+}
+
+/**
+ * Gets ARIA attributes to improve accessibility
+ * 
+ * @return array Array with ARIA attributes
+ */
+function muc_get_aria_attributes() {
+    return [
+        'search' => [
+            'label' => __('Search media files', 'media-usage-checker'),
+            'placeholder' => __('Search media files...', 'media-usage-checker'),
+            'button' => [
+                'label' => __('Search', 'media-usage-checker')
+            ]
+        ],
+        'filter' => [
+            'label' => __('Filter media files', 'media-usage-checker'),
+            'options' => [
+                'all' => __('All files', 'media-usage-checker'),
+                'used' => __('Used files', 'media-usage-checker'),
+                'unused' => __('Unused files', 'media-usage-checker')
+            ]
+        ]
+    ];
+}
+
+/**
+ * Displays error or success messages
+ * 
+ * @param string $message Message to display
+ * @param string $type Message type (error, warning, success, info)
+ * @param bool $dismissible Whether the message can be dismissed
+ * @return void
+ */
+function muc_display_notice($message, $type = 'info', $dismissible = true) {
+    $class = 'notice notice-' . esc_attr($type);
+    if ($dismissible) {
+        $class .= ' is-dismissible';
+    }
+    ?>
+    <div class="<?php echo esc_attr($class); ?>">
+        <p><?php echo wp_kses_post($message); ?></p>
+    </div>
+    <?php
+}
+
+/**
+ * Handles plugin updates
+ * 
+ * @return void
+ */
+function muc_check_for_updates() {
+    $current_version = get_option('muc_version', '1.0.0');
+    
+    if (version_compare($current_version, MUC_VERSION, '<')) {
+        // Update database schema if needed
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        // Example: Update options or database tables
+        if (version_compare($current_version, '2.0.0', '<')) {
+            // Migrations for version 2.0.0
+        }
+        
+        // Update the version in the database
+        update_option('muc_version', MUC_VERSION);
+        
+        // Clear cache after update
+        muc_clear_cache();
+    }
+}
+add_action('plugins_loaded', 'muc_check_for_updates');
+
+/**
+ * Documentación para desarrolladores
+ * 
+ * Filtros disponibles:
+ * - 'muc_allowed_mime_types' - Modificar tipos MIME permitidos
+ * - 'muc_scan_batch_size' - Cambiar el tamaño del lote de escaneo
+ * - 'muc_scan_frequency' - Cambiar la frecuencia de escaneo programado
+ * 
+ * Acciones disponibles:
+ * - 'muc_before_scan' - Antes de iniciar un escaneo
+ * - 'muc_after_scan' - Después de completar un escaneo
+ * - 'muc_before_delete' - Antes de eliminar archivos
+ * - 'muc_after_delete' - Después de eliminar archivos
+ */

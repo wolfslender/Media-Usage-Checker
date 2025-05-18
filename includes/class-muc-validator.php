@@ -73,7 +73,7 @@ class MUC_Validator {
     }
 }
 
-// Inicializar el validador
+// Initialize the validator
 add_action('plugins_loaded', function() {
     MUC_Validator::get_instance();
 });

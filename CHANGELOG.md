@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.8.1] - 2025-05-18
+
+### Added
+- Documentación completa para desarrolladores en `docs/DEVELOPER.md`
+- Ejemplo de integración personalizada en `examples/custom-integration.php`
+- Sistema mejorado de manejo de errores y logs
+- Soporte para filtros y acciones personalizadas
+- Documentación de la API REST
+
+### Fixed
+- Corregidos errores de sintaxis en el archivo principal
+- Mejorado el manejo de errores en el escaneo de archivos
+- Optimizado el rendimiento del escaneo
+- Corregidos problemas de seguridad en las verificaciones de capacidad del usuario
+
+### Changed
+- Actualizada la documentación del plugin
+- Mejorada la estructura del código para mayor mantenibilidad
+- Optimizado el sistema de caché
+
 ## [2.8.0] - 2025-05-18
 
 ### Added

@@ -19,7 +19,7 @@ class MUC_Logger {
         $upload_dir = wp_upload_dir();
         $this->log_file = $upload_dir['basedir'] . '/muc-logs/muc-' . date('Y-m-d') . '.log';
         
-        // Crear directorio de logs si no existe
+        // Create logs directory if it doesn't exist
         wp_mkdir_p(dirname($this->log_file));
     }
 
@@ -42,12 +42,12 @@ class MUC_Logger {
             $message
         );
 
-        // Verificar tamaño del archivo
+        // Check file size
         if (file_exists($this->log_file) && filesize($this->log_file) > $this->max_log_size) {
             $this->rotate_logs();
         }
 
-        // Escribir en el archivo
+        // Write to file
         error_log($log_message, 3, $this->log_file);
     }
 

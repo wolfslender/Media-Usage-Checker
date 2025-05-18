@@ -1,13 +1,9 @@
 # Media Usage Checker - WordPress Plugin
 
 ## Description
-Media Usage Checker is an advanced WordPress plugin that helps administrators identify and manage media files usage across their website. The plugin performs deep scanning of your media library and provides comprehensive tools for managing unused files.
+# Media Usage Checker
 
-## Key Features
-
-### Media Detection
-- Complete media usage scanning in:
-  - Posts and Pages
+A powerful and easy-to-use WordPress plugin that helps you identify and manage unused media files on your website. Save server space and improve your site's performance by removing unnecessary files.
   - WordPress Customizer
   - Page Builders (Elementor, WPBakery, etc.)
   - Widgets and Menus
