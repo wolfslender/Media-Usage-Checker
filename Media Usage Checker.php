@@ -4,9 +4,11 @@
 Plugin Name: Media Usage Checker
 Plugin URI: https://oliverodev.pages.dev/
 Description: Identifies which media library files are in use in WordPress content and allows you to delete unused ones.
-Version: 2.7.0
+Version: 2.8.0
 Author: Alexis Olivero
 Author URI: https://www.oliverodev.pages.dev/
+Text Domain: media-usage-checker
+Domain Path: /languages
 */
 
 if (!defined('ABSPATH')) {
@@ -248,659 +250,568 @@ function muc_background_check() {
 }
 add_action('muc_background_check', 'muc_background_check');
 
+// Agregar estilos y scripts necesarios
+add_action('admin_enqueue_scripts', 'muc_enqueue_admin_assets');
+function muc_enqueue_admin_assets($hook) {
+    if ('toplevel_page_media-usage-checker' !== $hook) {
+        return;
+    }
+    
+    wp_enqueue_style('muc-admin-style', plugins_url('assets/css/admin.css', __FILE__));
+    wp_enqueue_script('muc-admin-script', plugins_url('assets/js/admin.js', __FILE__), array('jquery'), '1.0', true);
+    
+    wp_localize_script('muc-admin-script', 'mucAdmin', array(
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('muc_ajax_nonce')
+    ));
+}
+
 // Función que muestra el contenido de la página principal del plugin
 function muc_admin_page() {
     muc_verify_user_capabilities();
     
-    // Forzar verificación si se solicita
-    if (isset($_POST['muc_force_check']) && check_admin_referer('muc_force_check', 'muc_force_check_nonce')) {
-        delete_option('muc_current_offset');
-        delete_option('muc_total_processed');
-        delete_option('muc_last_check');
-        wp_schedule_single_event(time(), 'muc_background_check');
-    }
-    
-    $used_page = isset($_GET['used_page']) ? max(1, intval($_GET['used_page'])) : 1;
-    $unused_page = isset($_GET['unused_page']) ? max(1, intval($_GET['unused_page'])) : 1;
-    $per_page = 20;
-
-    // Verificar si hay una verificación en progreso
-    $is_checking = get_option('muc_current_offset') !== false;
-    
-    // Si está en progreso, programar la siguiente verificación
-    if ($is_checking && !wp_next_scheduled('muc_background_check')) {
-        wp_schedule_single_event(time() + 1, 'muc_background_check');
-    }
-    
-    $last_check = get_option('muc_last_check');
-    $total_processed = get_option('muc_total_processed', 0);
-
-    $used_media = [];
-    $unused_media = [];
-
-    for ($i = 0; $i < $total_processed; $i += MUC_Config::BATCH_SIZE) {
-        $results = get_option('muc_results_' . $i, []);
-        $used_media = array_merge($used_media, $results['used'] ?? []);
-        $unused_media = array_merge($unused_media, $results['unused'] ?? []);
-    }
-
-    // Filtrar archivos que realmente existen
-    $unused_media = array_filter($unused_media, function($media) {
-        $file_path = get_attached_file($media->ID);
-        return $file_path && file_exists($file_path) && filesize($file_path) > 0;
-    });
-
-    $used_media_paged = muc_get_paged_results($used_media, $used_page, $per_page);
-    $unused_media_paged = muc_get_paged_results($unused_media, $unused_page, $per_page);
-
+    $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
     ?>
-    <div class="wrap">
-        <h1>Media Usage Checker By Alexis Olivero - OliveroDev</h1>
-        <p>This tool allows you to identify and delete unused files in the media library.</p>
+    <div class="wrap muc-wrap">
+        <div class="muc-header">
+            <h1>Media Usage Checker</h1>
+            <p class="muc-version">Version 2.7.0</p>
+        </div>
+
+        <nav class="muc-nav-tab-wrapper">
+            <a href="?page=media-usage-checker&tab=dashboard" class="nav-tab <?php echo $current_tab === 'dashboard' ? 'nav-tab-active' : ''; ?>">
+                <span class="dashicons dashicons-dashboard"></span> Dashboard
+            </a>
+            <a href="?page=media-usage-checker&tab=media-files" class="nav-tab <?php echo $current_tab === 'media-files' ? 'nav-tab-active' : ''; ?>">
+                <span class="dashicons dashicons-admin-media"></span> Media Files
+            </a>
+            <a href="?page=media-usage-checker&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
+                <span class="dashicons dashicons-admin-settings"></span> Settings
+            </a>
+        </nav>
+
+        <div class="muc-content">
+            <?php
+            switch ($current_tab) {
+                case 'dashboard':
+                    muc_display_dashboard();
+                    break;
+                case 'media-files':
+                    muc_display_media_files();
+                    break;
+                case 'settings':
+                    muc_display_settings();
+                    break;
+            }
+            ?>
+        </div>
+    </div>
+    <?php
+}
+
+function muc_display_dashboard() {
+    $total_media = wp_count_posts('attachment')->inherit;
+    $used_count = get_option('muc_used_count', 0);
+    $unused_count = get_option('muc_unused_count', 0);
+    $last_check = get_option('muc_last_check');
+    ?>
+    <div class="muc-dashboard">
+        <div class="muc-stats-grid">
+            <div class="muc-stat-card">
+                <span class="dashicons dashicons-admin-media"></span>
+                <h3>Total Media Files</h3>
+                <p class="muc-stat-number"><?php echo number_format($total_media); ?></p>
+            </div>
+            <div class="muc-stat-card">
+                <span class="dashicons dashicons-yes-alt"></span>
+                <h3>Files in Use</h3>
+                <p class="muc-stat-number"><?php echo number_format($used_count); ?></p>
+            </div>
+            <div class="muc-stat-card">
+                <span class="dashicons dashicons-warning"></span>
+                <h3>Unused Files</h3>
+                <p class="muc-stat-number"><?php echo number_format($unused_count); ?></p>
+            </div>
+        </div>
+
+        <div class="muc-actions">
+            <form method="post" class="muc-scan-form">
+                <?php wp_nonce_field('muc_force_check', 'muc_force_check_nonce'); ?>
+                <button type="submit" name="muc_force_check" class="button button-primary button-hero">
+                    <span class="dashicons dashicons-search"></span> Scan Media Files
+                </button>
+            </form>
+        </div>
 
         <?php if ($last_check): ?>
-            <p>Last check: <?php echo date('Y-m-d H:i:s', $last_check); ?></p>
-        <?php endif; ?>
-
-        <form method="post">
-            <?php wp_nonce_field('muc_force_check', 'muc_force_check_nonce'); ?>
-            <?php submit_button('Force Check', 'secondary', 'muc_force_check'); ?>
-        </form>
-
-        <h2>Files in Use</h2>
-        <?php if (!empty($used_media_paged['items'])) : ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th>File</th>
-                        <th>ID</th>
-                        <th>Size</th>
-                        <th>Upload Date</th>
-                        <th>Preview</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($used_media_paged['items'] as $media) : ?>
-                        <?php
-                        $file_path = get_attached_file($media->ID);
-                        $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
-                        $file_size = round($file_size, 2);
-                        $upload_date = get_the_date('Y-m-d H:i:s', $media->ID);
-                        $media_url = wp_get_attachment_url($media->ID);
-                        ?>
-                        <tr>
-                            <td><?php echo esc_html($media->post_title); ?></td>
-                            <td><?php echo esc_html($media->ID); ?></td>
-                            <td><?php echo esc_html($file_size); ?> MB</td>
-                            <td><?php echo esc_html($upload_date); ?></td>
-                            <td>
-                                <a href="<?php echo esc_url($media_url); ?>" target="_blank" class="button button-secondary">
-                                    <?php echo esc_html(muc_get_file_type_text($media->ID)); ?>
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php muc_display_pagination($used_page, $used_media_paged['total_pages'], 'used_page'); ?>
-        <?php else : ?>
-            <p>No files were found in use.</p>
-        <?php endif; ?>
-
-        <h2>Files Not in Use</h2>
-        <?php if (!empty($unused_media_paged['items'])) : ?>
-            <form method="post">
-                <?php wp_nonce_field('muc_bulk_delete', 'muc_bulk_nonce'); ?>
-                <table class="wp-list-table widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="select-all"></th>
-                            <th>File</th>
-                            <th>ID</th>
-                            <th>Size</th>
-                            <th>Upload Date</th>
-                            <th>Preview</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($unused_media_paged['items'] as $media) : ?>
-                            <?php
-                            $file_path = get_attached_file($media->ID);
-                            $file_size = file_exists($file_path) ? filesize($file_path) / 1024 / 1024 : 0;
-                            $file_size = round($file_size, 2);
-                            $upload_date = get_the_date('Y-m-d H:i:s', $media->ID);
-                            $media_url = wp_get_attachment_url($media->ID);
-                            ?>
-                            <tr>
-                                <td><input type="checkbox" name="selected_media[]" value="<?php echo esc_attr($media->ID); ?>"></td>
-                                <td><?php echo esc_html($media->post_title); ?></td>
-                                <td><?php echo esc_html($media->ID); ?></td>
-                                <td><?php echo esc_html($file_size); ?> MB</td>
-                                <td><?php echo esc_html($upload_date); ?></td>
-                                <td>
-                                    <a href="<?php echo esc_url($media_url); ?>" target="_blank" class="button button-secondary">
-                                        <?php echo esc_html(muc_get_file_type_text($media->ID)); ?>
-                                    </a>
-                                </td>
-                                <td>
-                                    <form method="post" style="display:inline;">
-                                        <?php wp_nonce_field('muc_delete_media', 'muc_nonce'); ?>
-                                        <input type="hidden" name="media_id" value="<?php echo esc_attr($media->ID); ?>">
-                                        <input type="submit" name="delete_media" value="Delete" class="button button-secondary">
-                                    </form>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <input type="submit" name="bulk_delete" value="Delete Selected" class="button button-primary">
-            </form>
-            <?php muc_display_pagination($unused_page, $unused_media_paged['total_pages'], 'unused_page'); ?>
-        <?php else : ?>
-            <p>No unused files found.</p>
+        <div class="muc-last-scan">
+            <p>Last scan completed: <?php echo date('F j, Y g:i a', $last_check); ?></p>
+        </div>
         <?php endif; ?>
     </div>
     <?php
 }
 
-// Función para verificar si un medio está en uso (como imagen destacada o en contenido)
+function muc_display_media_files() {
+    // Obtener la página actual
+    $current_page = isset($_GET['media_page']) ? max(1, intval($_GET['media_page'])) : 1;
+    $per_page = 20;
+
+    // Obtener todos los archivos multimedia
+    $media_query = new WP_Query([
+        'post_type' => 'attachment',
+        'post_status' => 'inherit',
+        'posts_per_page' => $per_page,
+        'paged' => $current_page,
+        'orderby' => 'date',
+        'order' => 'DESC'
+    ]);
+
+    ?>
+    <div class="muc-media-files">
+        <h2>Archivos Multimedia</h2>
+        
+        <?php if ($media_query->have_posts()) : ?>
+            <form method="post" class="muc-media-form">
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th class="check-column">
+                                <input type="checkbox" id="select-all">
+                            </th>
+                            <th>Vista Previa</th>
+                            <th>Título</th>
+                            <th>Tipo</th>
+                            <th>Tamaño</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while ($media_query->have_posts()) : $media_query->the_post(); 
+                            $media_id = get_the_ID();
+                            $file_path = get_attached_file($media_id);
+                            $file_size = file_exists($file_path) ? size_format(filesize($file_path), 2) : 'N/A';
+                            $mime_type = get_post_mime_type($media_id);
+                            $is_image = wp_attachment_is_image($media_id);
+                            $is_used = muc_esta_medio_en_uso($media_id);
+                            ?>
+                            <tr>
+                                <td>
+                                    <input type="checkbox" name="selected_media[]" value="<?php echo esc_attr($media_id); ?>">
+                                </td>
+                                <td>
+                                    <?php if ($is_image) : ?>
+                                        <?php echo wp_get_attachment_image($media_id, [50, 50]); ?>
+                                    <?php else : ?>
+                                        <span class="dashicons dashicons-media-default"></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <strong><?php the_title(); ?></strong>
+                                    <div class="row-actions">
+                                        <span class="view">
+                                            <a href="<?php echo esc_url(wp_get_attachment_url($media_id)); ?>" target="_blank">Ver</a>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td><?php echo esc_html($mime_type); ?></td>
+                                <td><?php echo esc_html($file_size); ?></td>
+                                <td><?php echo get_the_date(); ?></td>
+                                <td>
+                                    <span class="muc-status <?php echo $is_used ? 'used' : 'unused'; ?>">
+                                        <?php echo $is_used ? __('File in use', 'media-usage-checker') : __('File not in use', 'media-usage-checker'); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <button type="submit" name="delete_media" value="<?php echo esc_attr($media_id); ?>" 
+                                            class="button button-secondary" 
+                                            <?php echo $is_used ? 'disabled' : ''; ?>>
+                                        <?php _e('Delete', 'media-usage-checker'); ?>
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+
+                <div class="tablenav bottom">
+                    <div class="alignleft actions bulkactions">
+                        <button type="submit" name="bulk_delete" class="button button-primary">
+                            Eliminar Seleccionados
+                        </button>
+                    </div>
+                    <?php
+                    echo paginate_links([
+                        'base' => add_query_arg('media_page', '%#%'),
+                        'format' => '',
+                        'prev_text' => __('&laquo;'),
+                        'next_text' => __('&raquo;'),
+                        'total' => $media_query->max_num_pages,
+                        'current' => $current_page
+                    ]);
+                    ?>
+                </div>
+            </form>
+        <?php else : ?>
+            <p>No se encontraron archivos multimedia.</p>
+        <?php endif; 
+        wp_reset_postdata();
+        ?>
+    </div>
+    <?php
+}
+
+function muc_display_settings() {
+    // Guardar cambios en la configuración
+    if (isset($_POST['muc_save_settings']) && check_admin_referer('muc_settings_nonce')) {
+        $batch_size = absint($_POST['muc_batch_size']);
+        $scan_frequency = sanitize_text_field($_POST['muc_scan_frequency']);
+        $file_types = isset($_POST['muc_file_types']) ? array_map('sanitize_text_field', $_POST['muc_file_types']) : [];
+        
+        update_option('muc_batch_size', $batch_size);
+        update_option('muc_scan_frequency', $scan_frequency);
+        update_option('muc_file_types', $file_types);
+        
+        echo '<div class="notice notice-success"><p>Configuración guardada exitosamente.</p></div>';
+    }
+
+    // Obtener valores actuales
+    $batch_size = get_option('muc_batch_size', 100);
+    $scan_frequency = get_option('muc_scan_frequency', 'daily');
+    $file_types = get_option('muc_file_types', ['image', 'document', 'video', 'audio']);
+    ?>
+    <div class="muc-settings">
+        <h2><?php _e('Media Usage Checker Settings', 'media-usage-checker'); ?></h2>
+        
+        <form method="post" class="muc-settings-form">
+            <?php wp_nonce_field('muc_settings_nonce'); ?>
+            
+            <div class="muc-setting-section">
+                <h3><?php _e('Performance', 'media-usage-checker'); ?></h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="muc_batch_size"><?php _e('Batch Size', 'media-usage-checker'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number" 
+                                   id="muc_batch_size" 
+                                   name="muc_batch_size" 
+                                   value="<?php echo esc_attr($batch_size); ?>" 
+                                   min="10" 
+                                   max="500">
+                            <p class="description"><?php _e('Number of files to process per batch. A larger number may increase speed but also resource usage.', 'media-usage-checker'); ?></p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="muc-setting-section">
+                <h3>Programación de Escaneo</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Frecuencia de Escaneo</th>
+                        <td>
+                            <select name="muc_scan_frequency">
+                                <option value="hourly" <?php selected($scan_frequency, 'hourly'); ?>>Cada hora</option>
+                                <option value="twicedaily" <?php selected($scan_frequency, 'twicedaily'); ?>>Dos veces al día</option>
+                                <option value="daily" <?php selected($scan_frequency, 'daily'); ?>>Diariamente</option>
+                                <option value="weekly" <?php selected($scan_frequency, 'weekly'); ?>>Semanalmente</option>
+                            </select>
+                            <p class="description">Con qué frecuencia se realizará el escaneo automático de archivos.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="muc-setting-section">
+                <h3>Tipos de Archivo</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Incluir en el Escaneo</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" 
+                                       name="muc_file_types[]" 
+                                       value="image" 
+                                       <?php checked(in_array('image', $file_types)); ?>>
+                                Imágenes (jpg, png, gif, etc.)
+                            </label><br>
+                            <label>
+                                <input type="checkbox" 
+                                       name="muc_file_types[]" 
+                                       value="document" 
+                                       <?php checked(in_array('document', $file_types)); ?>>
+                                Documentos (pdf, doc, docx, etc.)
+                            </label><br>
+                            <label>
+                                <input type="checkbox" 
+                                       name="muc_file_types[]" 
+                                       value="video" 
+                                       <?php checked(in_array('video', $file_types)); ?>>
+                                Videos (mp4, mov, etc.)
+                            </label><br>
+                            <label>
+                                <input type="checkbox" 
+                                       name="muc_file_types[]" 
+                                       value="audio" 
+                                       <?php checked(in_array('audio', $file_types)); ?>>
+                                Audio (mp3, wav, etc.)
+                            </label>
+                            <p class="description">Selecciona los tipos de archivo que deseas incluir en el escaneo.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="muc-setting-section">
+                <h3>Notificaciones</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="muc_email_notifications">Notificaciones por Email</label>
+                        </th>
+                        <td>
+                            <input type="email" 
+                                   id="muc_email_notifications" 
+                                   name="muc_email_notifications" 
+                                   value="<?php echo esc_attr(get_option('muc_email_notifications')); ?>" 
+                                   class="regular-text">
+                            <p class="description">Recibe notificaciones cuando se encuentren archivos sin usar (deja en blanco para desactivar).</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <p class="submit">
+                <input type="submit" 
+                       name="muc_save_settings" 
+                       class="button button-primary" 
+                       value="Guardar Cambios">
+            </p>
+        </form>
+    </div>
+    <?php
+}
+
 function muc_esta_medio_en_uso($media_id) {
     global $wpdb;
     
-    // Cache del resultado
-    $cache_key = 'muc_media_used_' . $media_id;
-    $cached_result = wp_cache_get($cache_key);
-    if ($cached_result !== false) {
-        return $cached_result;
-    }
-    
-    // Obtener URL y nombre del archivo una sola vez
+    // Obtener la URL del archivo multimedia y sus variantes
     $media_url = wp_get_attachment_url($media_id);
-    if (!$media_url) {
-        wp_cache_set($cache_key, false, '', 3600);
-        return false;
-    }
-    $media_filename = basename($media_url);
+    if (!$media_url) return false;
     
-    // Consulta optimizada que combina todas las verificaciones
-    $is_used = $wpdb->get_var($wpdb->prepare("
-        SELECT EXISTS (
-            SELECT 1 FROM (
-                -- Verificar en contenido de posts y páginas
-                SELECT post_content FROM {$wpdb->posts}
-                WHERE post_type NOT IN ('attachment', 'revision', 'auto-draft', 'trash')
-                AND post_status NOT IN ('trash', 'auto-draft')
-                AND (
-                    post_content LIKE %s
-                    OR post_content LIKE %s
-                    OR post_content LIKE %s
-                    OR post_content LIKE %s
-                )
-                UNION ALL
-                -- Verificar en metadatos (incluyendo constructores de páginas)
-                SELECT meta_value FROM {$wpdb->postmeta}
-                WHERE meta_key IN (
-                    '_thumbnail_id',
-                    '_product_image_gallery',
-                    '_elementor_data',
-                    '_wpb_shortcodes_custom_css',
-                    '_divi_builder_settings',
-                    '_fusion_builder_content',
-                    '_cornerstone_data',
-                    '_themify_builder_settings_json',
-                    '_oxygen_builder_data',
-                    '_fl_builder_data',
-                    '_wp_page_template',
-                    '_wp_attached_file'
-                )
-                AND (
-                    meta_value = %d 
-                    OR meta_value LIKE %s 
-                    OR meta_value LIKE %s
-                    OR meta_value LIKE %s
-                    OR meta_value LIKE %s
-                )
-                UNION ALL
-                -- Verificar en opciones del tema y widgets
-                SELECT option_value FROM {$wpdb->options}
-                WHERE (
-                    option_name LIKE %s
-                    OR option_name LIKE %s
-                    OR option_name = 'site_icon'
-                    OR option_name = 'site_logo'
-                    OR option_name LIKE 'widget_%'
-                    OR option_name LIKE 'theme_mods_%'
-                )
-                AND option_value LIKE %s
-            ) AS combined_check
-            LIMIT 1
+    $media_path = get_attached_file($media_id);
+    $filename = basename($media_path);
+    $upload_dir = wp_upload_dir();
+    $relative_path = str_replace($upload_dir['basedir'], '', $media_path);
+    $base_url = str_replace($upload_dir['baseurl'], '', $media_url);
+    
+    // 1. Verificar en contenido de posts y páginas
+    $posts_with_media = $wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM {$wpdb->posts}
+        WHERE (
+            post_content LIKE %s 
+            OR post_content LIKE %s 
+            OR post_content LIKE %s
+            OR post_content LIKE %s
+        )
+        AND post_type NOT IN ('attachment', 'revision', 'auto-draft')
+        AND post_status IN ('publish', 'draft', 'private', 'pending')
+    ", 
+        '%' . $wpdb->esc_like($media_url) . '%',
+        '%' . $wpdb->esc_like($base_url) . '%',
+        '%' . $wpdb->esc_like($relative_path) . '%',
+        '%' . $wpdb->esc_like($filename) . '%'
+    ));
+    
+    if ($posts_with_media > 0) return true;
+    
+    // 2. Verificar en metadatos de posts
+    $meta_keys_to_check = array(
+        '_thumbnail_id',          // Imagen destacada
+        '_product_image_gallery', // WooCommerce
+        '_elementor_data',        // Elementor
+        '_wpb_shortcodes_custom_css', // WPBakery
+        '_divi_',                // Divi Builder
+        '_fusion_builder_',      // Fusion Builder
+        '_vc_post_settings',     // Visual Composer
+        'panels_data',           // Page Builder by SiteOrigin
+        '_cornerstone_data',     // Cornerstone
+        '_fl_builder_data',      // Beaver Builder
+        'block_data'             // Gutenberg blocks
+    );
+    
+    $meta_keys_sql = implode("' OR meta_key LIKE '", array_map(array($wpdb, 'esc_like'), $meta_keys_to_check));
+    
+    $meta_with_media = $wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM {$wpdb->postmeta}
+        WHERE (meta_key LIKE '" . $meta_keys_sql . "')
+        AND (
+            meta_value LIKE %s 
+            OR meta_value LIKE %s
+            OR meta_value LIKE %s
+            OR meta_value LIKE %s
+            OR meta_value = %s
         )
     ",
         '%' . $wpdb->esc_like($media_url) . '%',
-        '%' . $wpdb->esc_like($media_filename) . '%',
-        '%wp-image-' . $media_id . '%',
-        '%wp-att-' . $media_id . '%',
-        $media_id,
-        '%:"' . $media_id . '"%',
-        '%s:' . strlen($media_id) . ':"' . $media_id . '"%',
-        '%' . $wpdb->esc_like('{"url":"' . $media_url) . '%',
-        '%' . $wpdb->esc_like('"background-image":"' . $media_url) . '%',
-        'theme_mods_%',
-        'widget_%',
-        '%' . $wpdb->esc_like($media_url) . '%'
+        '%' . $wpdb->esc_like($base_url) . '%',
+        '%' . $wpdb->esc_like($relative_path) . '%',
+        '%' . $wpdb->esc_like($filename) . '%',
+        $media_id
     ));
-
-    // Verificaciones adicionales para constructores de páginas y plugins
-    if (!$is_used) {
-        // Verificar en CSS personalizado y bloques reutilizables
-        $custom_css = wp_get_custom_css();
-        if (strpos($custom_css, $media_url) !== false || strpos($custom_css, $media_filename) !== false) {
-            $is_used = true;
-        }
-        
-        // Verificar en bloques reutilizables
-        $reusable_blocks = get_posts([
-            'post_type' => 'wp_block',
-            'posts_per_page' => -1,
-            'post_status' => 'publish'
-        ]);
-        
-        foreach ($reusable_blocks as $block) {
-            if (
-                strpos($block->post_content, $media_url) !== false ||
-                strpos($block->post_content, 'wp-image-' . $media_id) !== false
-            ) {
-                $is_used = true;
-                break;
-            }
-        }
-    }
     
-    // Guardar en caché por una hora
-    wp_cache_set($cache_key, (bool)$is_used, '', 3600);
+    if ($meta_with_media > 0) return true;
     
-    return (bool)$is_used;
-}
-
-// Nueva función auxiliar para buscar en arrays recursivamente
-function muc_search_in_array($array, $search_values) {
-    foreach ($array as $value) {
-        if (is_array($value)) {
-            if (muc_search_in_array($value, $search_values)) {
-                return true;
-            }
-        } elseif (is_string($value) || is_numeric($value)) {
-            foreach ($search_values as $search) {
-                if (
-                    (is_numeric($search) && $value == $search) ||
-                    (is_string($search) && strpos($value, $search) !== false)
-                ) {
-                    return true;
-                }
-            }
-        }
-    }
+    // 3. Verificar en opciones y widgets
+    $options_with_media = $wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM {$wpdb->options}
+        WHERE (
+            option_name LIKE '%widget%'
+            OR option_name LIKE '%theme_mods%'
+            OR option_name LIKE '%sidebars_widgets%'
+            OR option_name LIKE '%custom_css%'
+            OR option_name LIKE '%background%'
+        )
+        AND (
+            option_value LIKE %s
+            OR option_value LIKE %s
+            OR option_value LIKE %s
+            OR option_value LIKE %s
+        )
+    ",
+        '%' . $wpdb->esc_like($media_url) . '%',
+        '%' . $wpdb->esc_like($base_url) . '%',
+        '%' . $wpdb->esc_like($relative_path) . '%',
+        '%' . $wpdb->esc_like($filename) . '%'
+    ));
+    
+    if ($options_with_media > 0) return true;
+    
+    // 4. Verificar en términos y taxonomías
+    $term_meta_with_media = $wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM {$wpdb->termmeta}
+        WHERE meta_value LIKE %s
+        OR meta_value LIKE %s
+        OR meta_value LIKE %s
+        OR meta_value LIKE %s
+    ",
+        '%' . $wpdb->esc_like($media_url) . '%',
+        '%' . $wpdb->esc_like($base_url) . '%',
+        '%' . $wpdb->esc_like($relative_path) . '%',
+        '%' . $wpdb->esc_like($filename) . '%'
+    ));
+    
+    if ($term_meta_with_media > 0) return true;
+    
+    // 5. Verificar si es logo del sitio o imagen de fondo
+    $custom_logo_id = get_theme_mod('custom_logo');
+    $header_image = get_theme_mod('header_image');
+    $background_image = get_theme_mod('background_image');
+    
+    if ($custom_logo_id == $media_id) return true;
+    if ($header_image && strpos($header_image, $filename) !== false) return true;
+    if ($background_image && strpos($background_image, $filename) !== false) return true;
+    
+    // Si no se encontró ningún uso, retornar false
     return false;
 }
 
-// Función para manejar la eliminación de medios
-function muc_handle_media_deletion() {
-    muc_verify_user_capabilities();
+function muc_cleanup_unused_media() {
+    // Obtener archivos sin usar
+    $args = array(
+        'post_type' => 'attachment',
+        'posts_per_page' => -1,
+        'post_status' => 'inherit'
+    );
     
-    // Manejar la eliminación individual
-    if (isset($_POST['delete_media']) && isset($_POST['media_id'])) {
-        // Verificar nonce específico para eliminación individual
-        if (!isset($_POST['muc_nonce']) || !wp_verify_nonce($_POST['muc_nonce'], 'muc_delete_media')) {
-            wp_die(__('Error de seguridad: Nonce inválido', 'media-usage-checker'));
-        }
-
-        $media_id = intval($_POST['media_id']);
-        
-        if ($media_id > 0) {
-            // Verificar si el medio está en uso
-            if (muc_esta_medio_en_uso($media_id)) {
-                // Redirigir con mensaje de error
-                wp_safe_redirect(add_query_arg(
-                    array(
-                        'page' => 'media-usage-checker',
-                        'muc_message' => 'delete_failed_in_use'
-                    ),
-                    admin_url('admin.php')
-                ));
-                exit;
-            }
-
-            $file = get_attached_file($media_id);
-            $deleted = wp_delete_attachment($media_id, true);
-            
-            // Verificación adicional para el archivo físico
-            if ($deleted && file_exists($file)) {
-                wp_delete_file($file);
-            }
-            
-            if ($deleted) {
-                wp_safe_redirect(add_query_arg(
-                    array(
-                        'page' => 'media-usage-checker',
-                        'muc_message' => 'delete_success',
-                        'muc_count' => 1
-                    ),
-                    admin_url('admin.php')
-                ));
-                exit;
-            }
+    $attachments = get_posts($args);
+    $unused_count = 0;
+    
+    foreach ($attachments as $attachment) {
+        if (!muc_esta_medio_en_uso($attachment->ID)) {
+            $unused_count++;
+            // Actualizar el contador de archivos sin usar
+            update_option('muc_unused_count', $unused_count);
         }
     }
-
-    // Manejar la eliminación por lotes
-    if (isset($_POST['bulk_delete'])) {
-        // Verificar nonce específico para eliminación en lote
-        if (!isset($_POST['muc_bulk_nonce']) || !wp_verify_nonce($_POST['muc_bulk_nonce'], 'muc_bulk_delete')) {
-            wp_die(__('Error de seguridad: Nonce inválido', 'media-usage-checker'));
-        }
-
-        if (!empty($_POST['selected_media']) && is_array($_POST['selected_media'])) {
-            $success_count = 0;
-            $failed_count = 0;
-            
-            foreach ($_POST['selected_media'] as $media_id) {
-                $media_id = intval($media_id);
-                if ($media_id > 0) {
-                    // Verificar si el medio está en uso
-                    if (muc_esta_medio_en_uso($media_id)) {
-                        $failed_count++;
-                        continue;
-                    }
-
-                    $file = get_attached_file($media_id);
-                    if (wp_delete_attachment($media_id, true)) {
-                        // Verificación adicional para el archivo físico
-                        if (file_exists($file)) {
-                            wp_delete_file($file);
-                        }
-                        $success_count++;
-                    }
-                }
-            }
-
-            wp_safe_redirect(add_query_arg(
-                array(
-                    'page' => 'media-usage-checker',
-                    'muc_message' => 'bulk_delete_success',
-                    'muc_count' => $success_count,
-                    'muc_failed_count' => $failed_count
-                ),
-                admin_url('admin.php')
-            ));
-            exit;
-        }
-    }
-}
-add_action('admin_init', 'muc_handle_media_deletion');
-
-// Función para los mensajes de notificación
-function muc_admin_notices() {
-    if (isset($_GET['muc_message'])) {
-        $message = sanitize_text_field($_GET['muc_message']);
-        $count = isset($_GET['muc_count']) ? intval($_GET['muc_count']) : 0;
-        $failed_count = isset($_GET['muc_failed_count']) ? intval($_GET['muc_failed_count']) : 0;
-        
-        $class = 'notice notice-success is-dismissible';
-        $notice = '';
-
-        switch ($message) {
-            case 'delete_success':
-                $notice = __('El archivo se ha eliminado exitosamente.', 'media-usage-checker');
-                break;
-            case 'bulk_delete_success':
-                $notice = sprintf(
-                    _n(
-                        'Se ha eliminado %d archivo exitosamente.',
-                        'Se han eliminado %d archivos exitosamente.',
-                        $count,
-                        'media-usage-checker'
-                    ),
-                    $count
-                );
-                if ($failed_count > 0) {
-                    $notice .= ' ' . sprintf(
-                        _n(
-                            'No se pudo eliminar %d archivo porque está en uso.',
-                            'No se pudieron eliminar %d archivos porque están en uso.',
-                            $failed_count,
-                            'media-usage-checker'
-                        ),
-                        $failed_count
-                    );
-                }
-                break;
-            case 'delete_failed_in_use':
-                $notice = __('No se pudo eliminar el archivo porque está en uso.', 'media-usage-checker');
-                $class = 'notice notice-error is-dismissible';
-                break;
-            case 'check_complete':
-                $notice = __('La verificación de medios se ha completado.', 'media-usage-checker');
-                break;
-            default:
-                return;
-        }
-        
-        if ($notice) {
-            printf('<div class="%1$s"><p>%2$s</p></div>', esc_attr($class), esc_html($notice));
-        }
-    }
-}
-add_action('admin_notices', 'muc_admin_notices');
-
-// Eliminar la función muc_admin_styles anterior y reemplazarla por:
-function muc_enqueue_admin_assets() {
-    if (isset($_GET['page']) && $_GET['page'] === 'media-usage-checker') {
-        $plugin_dir_url = plugin_dir_url(__FILE__);
-        $version = '2.5.9';
-        
-        // Registrar y encolar CSS
-        wp_enqueue_style(
-            'muc-admin-styles',
-            $plugin_dir_url . 'assets/css/muc-admin.css',
-            [],
-            $version
-        );
-
-        // Registrar y encolar JavaScript
-        wp_enqueue_script(
-            'muc-admin-scripts',
-            $plugin_dir_url . 'assets/js/muc-admin.js',
-            ['jquery'],
-            $version,
-            true
-        );
-
-        // Agregar variables localizadas para JavaScript
-        wp_localize_script('muc-admin-scripts', 'mucSettings', [
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('muc-ajax-nonce'),
-            'messages' => [
-                'confirmDelete' => __('¿Está seguro de que desea eliminar este archivo?', 'media-usage-checker'),
-                'confirmBulkDelete' => __('¿Está seguro de que desea eliminar los archivos seleccionados?', 'media-usage-checker'),
-                'noSelection' => __('Por favor, seleccione al menos un archivo para eliminar.', 'media-usage-checker'),
-                'checking' => __('Verificando...', 'media-usage-checker')
-            ]
-        ]);
-    }
-}
-add_action('admin_enqueue_scripts', 'muc_enqueue_admin_assets');
-
-// Agregar esta nueva función después de muc_admin_styles()
-function muc_get_file_type_text($media_id) {
-    $mime_type = get_post_mime_type($media_id);
-    $type_parts = explode('/', $mime_type);
-    $main_type = $type_parts[0];
-    $sub_type = $type_parts[1] ?? '';
-
-    switch ($main_type) {
-        case 'image':
-            return 'View image';
-        case 'video':
-            return 'View video';
-        case 'audio':
-            return 'Ver audio';
-        case 'application':
-            switch ($sub_type) {
-                case 'pdf':
-                    return 'View PDF';
-                case 'msword':
-                case 'vnd.openxmlformats-officedocument.wordprocessingml.document':
-                    return 'View document';
-                case 'vnd.ms-excel':
-                case 'vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-                    return 'View Excel';
-                case 'vnd.ms-powerpoint':
-                case 'vnd.openxmlformats-officedocument.presentationml.presentation':
-                    return 'View PowerPoint';
-                case 'zip':
-                case 'x-zip':
-                case 'x-zip-compressed':
-                    return 'View ZIP';
-                case 'rar':
-                case 'x-rar':
-                case 'x-rar-compressed':
-                    return 'View RAR';
-                case 'x-7z-compressed':
-                    return 'View 7Z';
-                case 'x-tar':
-                    return 'View TAR';
-                case 'gzip':
-                case 'x-gzip':
-                    return 'View GZIP';
-                case 'x-msdownload':
-                case 'exe':
-                case 'x-exe':
-                    return 'View EXE';
-                default:
-                    return 'View archivo';
-            }
-        default:
-            return 'View archivo';
-    }
+    
+    // Actualizar el contador de archivos usados
+    $total_media = wp_count_posts('attachment')->inherit;
+    update_option('muc_used_count', $total_media - $unused_count);
+    
+    // Actualizar la última verificación
+    update_option('muc_last_check', time());
 }
 
-// Función para forzar una verificación manual
-function muc_force_check() {
+function muc_load_textdomain() {
+    load_plugin_textdomain('media-usage-checker', false, dirname(plugin_basename(__FILE__)) . '/languages');
+}
+add_action('plugins_loaded', 'muc_load_textdomain');
+
+
+function muc_update_dashboard_stats() {
+    global $wpdb;
+    
+    // Obtener total de archivos multimedia
+    $total_media = $wpdb->get_var("
+        SELECT COUNT(*)
+        FROM {$wpdb->posts}
+        WHERE post_type = 'attachment'
+        AND post_status = 'inherit'
+    ");
+    
+    $used_count = 0;
+    $unused_count = 0;
+    
+    // Procesar en lotes para evitar timeout
+    $batch_size = 100;
+    $offset = 0;
+    
+    while (true) {
+        $attachments = $wpdb->get_col($wpdb->prepare("
+            SELECT ID
+            FROM {$wpdb->posts}
+            WHERE post_type = 'attachment'
+            AND post_status = 'inherit'
+            LIMIT %d OFFSET %d
+        ", $batch_size, $offset));
+        
+        if (empty($attachments)) {
+            break;
+        }
+        
+        foreach ($attachments as $attachment_id) {
+            if (muc_esta_medio_en_uso($attachment_id)) {
+                $used_count++;
+            } else {
+                $unused_count++;
+            }
+        }
+        
+        $offset += $batch_size;
+        
+        // Actualizar las estadísticas en tiempo real
+        update_option('muc_used_count', $used_count);
+        update_option('muc_unused_count', $unused_count);
+        update_option('muc_total_media', $total_media);
+    }
+    
+    update_option('muc_last_check', time());
+}
+
+// Agregar la actualización de estadísticas al escaneo forzado
+add_action('admin_init', function() {
     if (isset($_POST['muc_force_check']) && check_admin_referer('muc_force_check', 'muc_force_check_nonce')) {
-        muc_background_check();
-        wp_redirect(add_query_arg('muc_message', 'check_complete', wp_get_referer()));
+        muc_update_dashboard_stats();
+        wp_redirect(add_query_arg('updated', '1', wp_get_referer()));
         exit;
     }
-}
-add_action('admin_init', 'muc_force_check');
-
-// Función mejorada para forzar la eliminación del archivo físico
-function muc_force_delete_attachment_file($delete, $post) {
-    if ($delete) {
-        // Obtener la ruta completa del archivo original
-        $file = get_attached_file($post->ID);
-        
-        // Obtener el directorio de uploads
-        $upload_dir = wp_upload_dir();
-        
-        // Obtener metadata del archivo
-        $metadata = wp_get_attachment_metadata($post->ID);
-        
-        // Eliminar el archivo original
-        if ($file && file_exists($file)) {
-            wp_delete_file($file);
-        }
-        
-        // Eliminar todas las miniaturas y variaciones
-        if (!empty($metadata['sizes'])) {
-            $base_dir = dirname($file) . '/';
-            
-            foreach ($metadata['sizes'] as $size => $sizeinfo) {
-                $size_file = $base_dir . $sizeinfo['file'];
-                if (file_exists($size_file)) {
-                    wp_delete_file($size_file);
-                }
-            }
-        }
-        
-        // Limpiar la caché y metadata
-        clean_attachment_cache($post->ID);
-        wp_cache_delete($post->ID, 'posts');
-        delete_post_meta($post->ID, '_wp_attachment_metadata');
-        delete_post_meta($post->ID, '_wp_attached_file');
-    }
-    
-    return $delete;
-}
-
-// Asegurarse de que la función se ejecute antes de la eliminación
-remove_filter('pre_delete_attachment', 'muc_force_delete_attachment_file');
-add_filter('pre_delete_attachment', 'muc_force_delete_attachment_file', 1, 2);
-
-// Modificar la función de encabezados de seguridad
-function muc_add_security_headers() {
-    // Solo agregar encabezados si los headers no han sido enviados
-    if (!headers_sent()) {
-        // Verificar si estamos en una página del plugin
-        if (isset($_GET['page']) && $_GET['page'] === 'media-usage-checker') {
-            header('X-Content-Type-Options: nosniff');
-            header('X-Frame-Options: SAMEORIGIN');
-            header('X-XSS-Protection: 1; mode=block');
-            header('Referrer-Policy: strict-origin-when-cross-origin');
-        }
-    }
-}
-
-// Cambiar el hook para los encabezados de seguridad
-remove_action('admin_init', 'muc_add_security_headers');
-add_action('admin_head', 'muc_add_security_headers', 1);
-
-// Mejorar la seguridad de las operaciones con archivos
-function muc_secure_file_operation($file_path) {
-    // Validar que el archivo está dentro del directorio de uploads
-    $upload_dir = wp_upload_dir();
-    if (strpos($file_path, $upload_dir['basedir']) !== 0) {
-        return false;
-    }
-    
-    // Verificar extensión del archivo
-    $allowed_extensions = array_keys(get_allowed_mime_types());
-    $file_extension = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
-    if (!in_array($file_extension, $allowed_extensions)) {
-        return false;
-    }
-    
-    return true;
-}
-
-class MUC_Logger {
-    private static function format_message($message, Exception $e = null) {
-        $formatted = 'Media Usage Checker - ' . $message;
-        if ($e) {
-            $formatted .= ': ' . esc_html($e->getMessage());
-        }
-        return $formatted;
-    }
-    
-    public static function error($message, Exception $e = null) {
-        error_log(self::format_message($message, $e));
-    }
-}
-
-function muc_log_error($message, $exception = null) {
-    $error_message = 'Media Usage Checker - ' . $message;
-    if ($exception instanceof Exception) {
-        $error_message .= ': ' . $exception->getMessage();
-    }
-    error_log($error_message);
-}
-
-function muc_check_progress() {
-    check_ajax_referer('muc-ajax-nonce', 'nonce');
-    
-    wp_send_json([
-        'is_checking' => get_option('muc_current_offset') !== false
-    ]);
-}
-add_action('wp_ajax_muc_check_progress', 'muc_check_progress');
+});

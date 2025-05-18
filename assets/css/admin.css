@@ -1,0 +1,449 @@
+/* Variables globales */
+:root {
+    --primary-color: #2271b1;
+    --secondary-color: #135e96;
+    --success-color: #00a32a;
+    --warning-color: #dba617;
+    --error-color: #d63638;
+    --background-color: #f0f0f1;
+    --text-color: #1d2327;
+    --border-radius: 4px;
+    --transition-speed: 0.3s;
+}
+
+/* Base y Reset */
+.muc-wrap {
+    max-width: 100%;
+    padding: 1rem;
+}
+
+/* Mobile First - Estilos base */
+.muc-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 0;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.muc-version {
+    font-size: 0.875rem;
+    color: var(--text-color);
+    opacity: 0.7;
+}
+
+/* Navegación responsive */
+.muc-nav-tab-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-speed) ease;
+}
+
+.nav-tab:hover,
+.nav-tab-active {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+/* Dashboard Cards */
+.muc-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.muc-stat-card {
+    background: #fff;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform var(--transition-speed) ease;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.muc-stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.muc-stat-card span.dashicons {
+    font-size: 2rem;
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+/* Tabla de archivos multimedia */
+.muc-media-files table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.muc-media-files th,
+.muc-media-files td {
+    padding: 1rem;
+}
+
+/* Formularios y controles */
+.muc-settings-form {
+    background: #fff;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.muc-setting-section {
+    margin-bottom: 2rem;
+    animation: slideIn 0.5s ease-out;
+}
+
+/* Estados y badges */
+.muc-status {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.muc-status.used {
+    background: rgba(0,163,42,0.1);
+    color: var(--success-color);
+}
+
+.muc-status.unused {
+    background: rgba(219,166,23,0.1);
+    color: var(--warning-color);
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Media Queries - Tablet */
+@media (min-width: 768px) {
+    .muc-nav-tab-wrapper {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .muc-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .muc-header {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+}
+
+/* Media Queries - Desktop */
+@media (min-width: 1024px) {
+    .muc-wrap {
+        padding: 2rem;
+    }
+    
+    .muc-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .muc-media-files table {
+        display: table;
+    }
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Soporte para modo oscuro */
+@media (prefers-color-scheme: dark) {
+    .muc-stat-card,
+    .muc-settings-form {
+        background: #2c3338;
+        color: #f0f0f1;
+    }
+    
+    .nav-tab {
+        background: #2c3338;
+        color: #f0f0f1;
+    }
+}
+.muc-wrap {
+    margin: 20px 20px 0 0;
+    max-width: 1200px;
+}
+
+.muc-header {
+    background: linear-gradient(135deg, #2271b1 0%, #135e96 100%);
+    padding: 30px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    color: white;
+    position: relative;
+}
+
+.muc-header h1 {
+    margin: 0;
+    color: white;
+    font-size: 24px;
+}
+
+.muc-version {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    margin: 0;
+    opacity: 0.8;
+}
+
+.muc-nav-tab-wrapper {
+    margin-bottom: 20px;
+}
+
+.muc-nav-tab-wrapper .nav-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 15px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.muc-nav-tab-wrapper .nav-tab-active {
+    background: #2271b1;
+    color: white;
+    border-color: #135e96;
+}
+
+.muc-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.muc-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.muc-stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.muc-stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.muc-stat-card .dashicons {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: #2271b1;
+}
+
+.muc-stat-card h3 {
+    margin: 10px 0;
+    color: #1d2327;
+}
+
+.muc-stat-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2271b1;
+    margin: 0;
+}
+
+.muc-actions {
+    text-align: center;
+    margin: 30px 0;
+}
+
+.muc-scan-form button {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 30px !important;
+    height: auto !important;
+    font-size: 16px !important;
+}
+
+.muc-last-scan {
+    text-align: center;
+    color: #646970;
+    font-style: italic;
+}
+
+
+/* Estilos para la página de archivos multimedia */
+.muc-media-files {
+    margin-top: 20px;
+}
+
+.muc-media-files .wp-list-table {
+    margin-top: 15px;
+}
+
+.muc-media-files .check-column {
+    width: 2.2em;
+    padding: 8px 10px;
+}
+
+.muc-status {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 100px;
+}
+
+.muc-status.used {
+    background-color: #dff0d8;
+    color: #3c763d;
+    border: 1px solid #d6e9c6;
+}
+
+.muc-status.unused {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.muc-media-files .dashicons {
+    font-size: 2em;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.tablenav {
+    margin: 20px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pagination-links {
+    margin-left: auto;
+}
+
+.pagination-links a,
+.pagination-links span {
+    padding: 4px 8px;
+    margin: 0 2px;
+    border: 1px solid #ddd;
+    text-decoration: none;
+    border-radius: 3px;
+}
+
+.pagination-links .current {
+    background-color: #2271b1;
+    color: white;
+    border-color: #135e96;
+}
+
+
+/* Estilos para la página de ajustes */
+.muc-settings {
+    max-width: 800px;
+    margin: 20px auto;
+}
+
+.muc-setting-section {
+    background: white;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.muc-setting-section h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.muc-settings-form .form-table {
+    margin-top: 0;
+}
+
+.muc-settings-form .form-table th {
+    padding: 15px 10px 15px 0;
+    width: 200px;
+}
+
+.muc-settings-form .description {
+    color: #666;
+    font-style: italic;
+    margin: 5px 0 0;
+}
+
+.muc-settings-form input[type="checkbox"] + label {
+    margin-left: 8px;
+}
+
+.muc-settings-form label {
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.muc-settings .notice {
+    margin: 20px 0;
+}
