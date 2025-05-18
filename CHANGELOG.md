@@ -1,5 +1,64 @@
 # Changelog
 
+## [2.8.0] - 2025-05-18
+
+### Added
+- Detección mejorada de archivos en uso:
+  - Soporte completo para temas personalizados
+  - Verificación en widgets y menús
+  - Detección en CSS personalizado
+  - Análisis de logos e íconos del sitio
+  - Comprobación en áreas de widgets
+- Diseño responsive y mobile-first:
+  - Interfaz adaptativa
+  - Soporte para dispositivos móviles
+  - Animaciones suaves
+  - Mejor experiencia de usuario
+- Soporte multilenguaje:
+  - Inglés por defecto
+  - Sistema de traducciones mejorado
+  - Textos consistentes
+- Mejoras en rendimiento:
+  - Optimización de consultas SQL
+  - Sistema de caché mejorado
+  - Procesamiento por lotes optimizado
+  - Mejor gestión de recursos
+
+### Changed
+- Rediseño completo de la interfaz de usuario
+- Sistema de detección de archivos optimizado
+- Mejora en la gestión de memoria
+- Actualización del sistema de procesamiento por lotes
+- Optimización de consultas a la base de datos
+- Mejora en el sistema de caché
+
+### Fixed
+- Problemas de timeout del servidor
+- Optimización del uso de memoria
+- Consistencia de la interfaz de usuario
+- Problemas de visualización en móviles
+- Contraste de colores en la sección de configuración
+- Precisión en la detección de archivos
+
+### Security
+- Validación mejorada de tipos de archivo
+- Verificación de permisos de usuario
+- Mejor sanitización de entradas
+- Proceso seguro de eliminación de archivos
+
+### Performance
+- Reducción de carga del servidor
+- Optimización de consultas
+- Sistema de caché mejorado
+- Mejor gestión de recursos
+- Procesamiento por lotes mejorado
+
+### Technical
+- Refactorización del código
+- Actualización a estándares de WordPress
+- Mejora en la documentación
+- Sistema de registro de errores mejorado
+
 ## [2.6.0] - 2025-05-17
 
 ### Added
