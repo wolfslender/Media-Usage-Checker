@@ -6,6 +6,10 @@
  * @since 2.8.0
  */
 
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly
+}
+
 class MUC_Validator {
     private static $instance = null;
 

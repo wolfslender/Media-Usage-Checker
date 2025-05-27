@@ -1,15 +1,20 @@
 <?php
-
-/*
-Plugin Name: Media Usage Checker
-Plugin URI: https://oliverodev.pages.dev/
-Description: Identifies which media library files are in use in WordPress content and allows you to delete unused ones.
-Version: 2.8.0
-Author: Alexis Olivero
-Author URI: https://www.oliverodev.pages.dev/
-Text Domain: media-usage-checker
-Domain Path: /languages
-*/
+/**
+ * Plugin Name: Media Usage Checker
+ * Plugin URI: https://wordpress.org/plugins/media-usage-checker/
+ * Description: Identifies which media library files are in use in WordPress content and allows you to delete unused ones.
+ * Version: 2.8.0
+ * Requires at least: 5.0
+ * Requires PHP: 7.4
+ * Author: Alexis Olivero
+ * Author URI: https://github.com/oliverodev
+ * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: media-usage-checker
+ * Domain Path: /languages
+ *
+ * @package Media_Usage_Checker
+ */
 
 if (!defined('ABSPATH')) {
     exit;
@@ -196,7 +201,7 @@ function muc_create_nonce($action) {
 // More strictly verify user capabilities
 function muc_verify_user_capabilities() {
     if (!current_user_can('manage_options') || !current_user_can('upload_files')) {
-        wp_die(__('No tienes permisos suficientes para acceder a esta página.', 'media-usage-checker'));
+        wp_die(esc_html__('No tienes permisos suficientes para acceder a esta página.', 'media-usage-checker'));
     }
 }
 
@@ -297,11 +302,19 @@ add_filter('cron_schedules', 'muc_add_cron_intervals');
 function muc_add_cron_intervals($schedules) {
     $schedules['fifteen_minutes'] = [
         'interval' => 900, // 15 minutos
-        'display' => __('Cada 15 minutos')
+        'display' => printf(
+            /* translators: %s: Time interval */
+            esc_html__('Every %s', 'media-usage-checker'),
+            esc_html('15 minutes')
+        )
     ];
     $schedules['thirty_minutes'] = [
         'interval' => 1800, // 30 minutos
-        'display' => __('Cada 30 minutos')
+        'display' => printf(
+            /* translators: %s: Time interval */
+            esc_html__('Every %s', 'media-usage-checker'),
+            esc_html('30 minutes')
+        )
     ];
     return $schedules;
 }
@@ -510,14 +523,14 @@ function muc_display_media_files() {
                                 <td><?php echo get_the_date(); ?></td>
                                 <td>
                                     <span class="muc-status <?php echo $is_used ? 'used' : 'unused'; ?>">
-                                        <?php echo $is_used ? __('File in use', 'media-usage-checker') : __('File not in use', 'media-usage-checker'); ?>
+                                        <?php echo $is_used ? esc_html__('File in use', 'media-usage-checker') : esc_html__('File not in use', 'media-usage-checker'); ?>
                                     </span>
                                 </td>
                                 <td>
                                     <button type="submit" name="delete_media" value="<?php echo esc_attr($media_id); ?>" 
                                             class="button button-secondary" 
                                             <?php echo $is_used ? 'disabled' : ''; ?>>
-                                        <?php _e('Delete', 'media-usage-checker'); ?>
+                                        <?php esc_html_e('Delete', 'media-usage-checker'); ?>
                                     </button>
                                 </td>
                             </tr>
@@ -535,8 +548,8 @@ function muc_display_media_files() {
                     echo paginate_links([
                         'base' => add_query_arg('media_page', '%#%'),
                         'format' => '',
-                        'prev_text' => __('&laquo;'),
-                        'next_text' => __('&raquo;'),
+                        'prev_text' => esc_html__('&laquo;', 'media-usage-checker'),
+                        'next_text' => esc_html__('&raquo;', 'media-usage-checker'),
                         'total' => $media_query->max_num_pages,
                         'current' => $current_page
                     ]);
@@ -572,17 +585,17 @@ function muc_display_settings() {
     $file_types = get_option('muc_file_types', ['image', 'document', 'video', 'audio']);
     ?>
     <div class="muc-settings">
-        <h2><?php _e('Media Usage Checker Settings', 'media-usage-checker'); ?></h2>
+        <h2><?php esc_html_e('Media Usage Checker Settings', 'media-usage-checker'); ?></h2>
         
         <form method="post" class="muc-settings-form">
             <?php wp_nonce_field('muc_settings_nonce'); ?>
             
             <div class="muc-setting-section">
-                <h3><?php _e('Performance', 'media-usage-checker'); ?></h3>
+                <h3><?php esc_html_e('Performance', 'media-usage-checker'); ?></h3>
                 <table class="form-table">
                     <tr>
                         <th scope="row">
-                            <label for="muc_batch_size"><?php _e('Batch Size', 'media-usage-checker'); ?></label>
+                            <label for="muc_batch_size"><?php esc_html_e('Batch Size', 'media-usage-checker'); ?></label>
                         </th>
                         <td>
                             <input type="number" 
@@ -591,35 +604,35 @@ function muc_display_settings() {
                                    value="<?php echo esc_attr($batch_size); ?>" 
                                    min="10" 
                                    max="500">
-                            <p class="description"><?php _e('Number of files to process per batch. A larger number may increase speed but also resource usage.', 'media-usage-checker'); ?></p>
+                            <p class="description"><?php esc_html_e('Number of files to process per batch. A larger number may increase speed but also resource usage.', 'media-usage-checker'); ?></p>
                         </td>
                     </tr>
                 </table>
             </div>
 
             <div class="muc-setting-section">
-                <h3><?php _e('Scan Schedule', 'media-usage-checker'); ?></h3>
+                <h3><?php esc_html_e('Scan Schedule', 'media-usage-checker'); ?></h3>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Scan Frequency', 'media-usage-checker'); ?></th>
+                        <th scope="row"><?php esc_html_e('Scan Frequency', 'media-usage-checker'); ?></th>
                         <td>
                             <select name="muc_scan_frequency">
-                                <option value="hourly" <?php selected($scan_frequency, 'hourly'); ?>><?php _e('Hourly', 'media-usage-checker'); ?></option>
-                                <option value="twicedaily" <?php selected($scan_frequency, 'twicedaily'); ?>><?php _e('Twice Daily', 'media-usage-checker'); ?></option>
-                                <option value="daily" <?php selected($scan_frequency, 'daily'); ?>><?php _e('Daily', 'media-usage-checker'); ?></option>
-                                <option value="weekly" <?php selected($scan_frequency, 'weekly'); ?>><?php _e('Weekly', 'media-usage-checker'); ?></option>
+                                <option value="hourly" <?php selected($scan_frequency, 'hourly'); ?>><?php esc_html_e('Hourly', 'media-usage-checker'); ?></option>
+                                <option value="twicedaily" <?php selected($scan_frequency, 'twicedaily'); ?>><?php esc_html_e('Twice Daily', 'media-usage-checker'); ?></option>
+                                <option value="daily" <?php selected($scan_frequency, 'daily'); ?>><?php esc_html_e('Daily', 'media-usage-checker'); ?></option>
+                                <option value="weekly" <?php selected($scan_frequency, 'weekly'); ?>><?php esc_html_e('Weekly', 'media-usage-checker'); ?></option>
                             </select>
-                            <p class="description"><?php _e('How often the automatic file scan will be performed.', 'media-usage-checker'); ?></p>
+                            <p class="description"><?php esc_html_e('How often the automatic file scan will be performed.', 'media-usage-checker'); ?></p>
                         </td>
                     </tr>
                 </table>
             </div>
 
             <div class="muc-setting-section">
-                <h3><?php _e('File Types', 'media-usage-checker'); ?></h3>
+                <h3><?php esc_html_e('File Types', 'media-usage-checker'); ?></h3>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Included File Types', 'media-usage-checker'); ?></th>
+                        <th scope="row"><?php esc_html_e('Included File Types', 'media-usage-checker'); ?></th>
                         <td>
                             <fieldset>
                                 <label>
@@ -627,7 +640,7 @@ function muc_display_settings() {
                                            name="muc_file_types[]" 
                                            value="image" 
                                            <?php checked(in_array('image', $file_types)); ?>>
-                                    <?php _e('Images (jpg, png, gif, etc.)', 'media-usage-checker'); ?>
+                                    <?php esc_html_e('Images (jpg, png, gif, etc.)', 'media-usage-checker'); ?>
                                 </label>
                                 <br>
                                 <label>
@@ -635,7 +648,7 @@ function muc_display_settings() {
                                            name="muc_file_types[]" 
                                            value="document" 
                                            <?php checked(in_array('document', $file_types)); ?>>
-                                    <?php _e('Documents (pdf, doc, docx, etc.)', 'media-usage-checker'); ?>
+                                    <?php esc_html_e('Documents (pdf, doc, docx, etc.)', 'media-usage-checker'); ?>
                                 </label>
                                 <br>
                                 <label>
@@ -643,7 +656,7 @@ function muc_display_settings() {
                                            name="muc_file_types[]" 
                                            value="video" 
                                            <?php checked(in_array('video', $file_types)); ?>>
-                                    <?php _e('Videos (mp4, mov, avi, etc.)', 'media-usage-checker'); ?>
+                                    <?php esc_html_e('Videos (mp4, mov, avi, etc.)', 'media-usage-checker'); ?>
                                 </label>
                                 <br>
                                 <label>
@@ -651,9 +664,9 @@ function muc_display_settings() {
                                            name="muc_file_types[]" 
                                            value="audio" 
                                            <?php checked(in_array('audio', $file_types)); ?>>
-                                    <?php _e('Audio (mp3, wav, ogg, etc.)', 'media-usage-checker'); ?>
+                                    <?php esc_html_e('Audio (mp3, wav, ogg, etc.)', 'media-usage-checker'); ?>
                                 </label>
-                                <p class="description"><?php _e('Select which types of files to include in the scan.', 'media-usage-checker'); ?></p>
+                                <p class="description"><?php esc_html_e('Select which types of files to include in the scan.', 'media-usage-checker'); ?></p>
                             </fieldset>
                         </td>
                     </tr>
@@ -662,7 +675,7 @@ function muc_display_settings() {
 
             <p class="submit">
                 <button type="submit" name="muc_save_settings" class="button button-primary">
-                    <?php _e('Save Settings', 'media-usage-checker'); ?>
+                    <?php esc_html_e('Save Settings', 'media-usage-checker'); ?>
                 </button>
             </p>
         </form>
@@ -824,12 +837,6 @@ function muc_cleanup_unused_media() {
     // Actualizar la última verificación
     update_option('muc_last_check', time());
 }
-
-function muc_load_textdomain() {
-    load_plugin_textdomain('media-usage-checker', false, dirname(plugin_basename(__FILE__)) . '/languages');
-}
-add_action('plugins_loaded', 'muc_load_textdomain');
-
 
 function muc_update_dashboard_stats() {
     global $wpdb;
@@ -1016,18 +1023,18 @@ function muc_rest_get_status($request) {
 function muc_get_aria_attributes() {
     return [
         'search' => [
-            'label' => __('Search media files', 'media-usage-checker'),
-            'placeholder' => __('Search media files...', 'media-usage-checker'),
+            'label' => esc_html__('Search media files', 'media-usage-checker'),
+            'placeholder' => esc_html__('Search media files...', 'media-usage-checker'),
             'button' => [
-                'label' => __('Search', 'media-usage-checker')
+                'label' => esc_html__('Search', 'media-usage-checker')
             ]
         ],
         'filter' => [
-            'label' => __('Filter media files', 'media-usage-checker'),
+            'label' => esc_html__('Filter media files', 'media-usage-checker'),
             'options' => [
-                'all' => __('All files', 'media-usage-checker'),
-                'used' => __('Used files', 'media-usage-checker'),
-                'unused' => __('Unused files', 'media-usage-checker')
+                'all' => esc_html__('All files', 'media-usage-checker'),
+                'used' => esc_html__('Used files', 'media-usage-checker'),
+                'unused' => esc_html__('Unused files', 'media-usage-checker')
             ]
         ]
     ];
